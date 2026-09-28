@@ -136,10 +136,10 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 |---|---|---|
 | 2026-09-28 | `5d183c5` | Project skeleton: structure, models, stubs, seed data, tests, docs |
 | 2026-09-28 | `3c83ec9` | Log normalizer, automatic incident IDs, learned patterns interface, demo bank reset |
-| 2026-09-28 | (this change) | Design doc: final architecture, module status, configuration, embedding proposal, open items |
+| 2026-09-28 | `a51c8c2` | Design doc: final architecture, module status, configuration, embedding proposal, open items |
+| 2026-09-28 | `8af7835` | Fix input validation (whitespace, required `reported_at`), log normalizer (comma milliseconds, region names), empty `GROQ_MODEL`; 9 regression tests |
 
 ## Open items
-- GitHub remote: repo URL pending; push after it is shared.
 - Decision: embedding options and the Integrate tab.
 - Build order: `agent/memory.py` and seed script, then `llm.py` and `service.py`, then UI, then ShopFast endpoints.
 

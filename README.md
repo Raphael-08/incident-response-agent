@@ -50,4 +50,4 @@ pytest                                                     # tests
 ```
 
 ## Status
-Project skeleton. Core modules have interfaces and TODOs for each owner; see the task split in `docs/DESIGN.md`.
+In progress. Config, models, log normalizer, fault switches and seed data are done and tested (21 tests passing). Memory, LLM advisor, service, ShopFast shop endpoints and UI still have TODOs for each owner; see the task split in `docs/DESIGN.md`.
