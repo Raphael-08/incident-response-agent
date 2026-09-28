@@ -47,7 +47,7 @@ Help on-call engineers at ShopFast (a fictional e-commerce platform) resolve pro
 | `agent/service.py` | `analyze_incident`, `record_outcome`; returns memory when LLM fails | Done, tested with fakes |
 | `shopfast/faults.py` | Fault switches and their log lines | Done |
 | `shopfast/app.py` | Mock shop endpoints; `/admin/faults` | Admin done, shop endpoints stubbed |
-| `ui/app.py` | Streamlit UI, 3 tabs | Placeholder |
+| `ui/app.py` | Streamlit UI, 3 tabs, example fault logs, text-only rendering of incident and LLM text | Done, tested with AppTest |
 | `scripts/seed_memory.py` | Validate seed data, `--bank-id`, load into Hindsight | Done, tested |
 | `data/seed_incidents.json` | 25 synthetic incidents | Done |
 
@@ -143,7 +143,7 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 
 ## Open items
 - Decision: embedding options and the Integrate tab.
-- Build order: (done) `agent/memory.py` and seed script, (done) `llm.py` and `service.py`, then UI, then ShopFast endpoints.
+- Build order: (done) `agent/memory.py` and seed script, (done) `llm.py` and `service.py`, (done) UI, then ShopFast endpoints.
 
 ## Future work
 - Agent learns whether its own suggestions worked (retain suggestion plus result).
