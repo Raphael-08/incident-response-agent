@@ -265,3 +265,90 @@ def test_context_manager_closes_client_even_on_error():
         with _memory(client):
             raise RuntimeError("boom")
     assert client.closed == 1
+
+
+# threads and event loops
+# The Hindsight SDK's sync methods run on the calling thread's event loop, and its aiohttp session binds to
+# the first loop it is used on. Streamlit runs each rerun in a new thread, so every call must run on one
+# thread owned by IncidentMemory. Otherwise the second rerun fails with
+# "Timeout context manager should be used inside a task".
+
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from hindsight_client import Hindsight
+
+
+def _in_new_thread(fn):
+    result = {}
+
+    def run():
+        try:
+            result["value"] = fn()
+        except Exception as exc:  # re-raised in the test thread
+            result["error"] = exc
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    thread.join()
+    if "error" in result:
+        raise result["error"]
+    return result["value"]
+
+
+class ThreadRecordingFake(ClosableFake):
+    def __init__(self):
+        super().__init__()
+        self.threads = set()
+
+    def _record(self, name, **kwargs):
+        self.threads.add(threading.get_ident())
+        super()._record(name, **kwargs)
+
+    def close(self):
+        self.threads.add(threading.get_ident())
+        super().close()
+
+
+def test_all_client_calls_run_on_one_thread_whatever_thread_calls():
+    client = ThreadRecordingFake()
+    memory = _memory(client)
+    _in_new_thread(lambda: memory.recall_similar(_incident()))
+    _in_new_thread(lambda: memory.recall_learned_patterns(_incident()))
+    _in_new_thread(lambda: memory.retain_outcome(_incident(), _outcome()))
+    memory.close()
+    assert len(client.threads) == 1
+
+
+@pytest.fixture
+def stub_hindsight_server():
+    """Local HTTP server that answers every POST with an empty recall result."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("content-length", 0)))
+            body = json.dumps({"results": []}).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_port}"
+    server.shutdown()
+
+
+def test_real_sdk_recall_works_from_successive_threads(stub_hindsight_server):
+    settings = Settings(stub_hindsight_server, "key", BANK, "key", "model")
+    memory = IncidentMemory(settings, client=Hindsight(base_url=stub_hindsight_server, api_key="key"))
+    try:
+        for _ in range(3):  # like three Streamlit reruns
+            assert _in_new_thread(lambda: memory.recall_similar(_incident())) == []
+    finally:
+        memory.close()

@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar
 
 from hindsight_client import Hindsight
@@ -84,6 +85,10 @@ class IncidentMemory:
             base_url=settings.hindsight_base_url,
             api_key=settings.hindsight_api_key,
         )
+        # The SDK's sync methods run on the calling thread's event loop, and its aiohttp session is bound to
+        # the first loop it runs on. Callers such as Streamlit reruns come from different threads, so every
+        # client call runs on this one thread, which keeps one event loop for the client's whole life.
+        self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hindsight")
 
     @property
     def bank_id(self) -> str:
@@ -91,7 +96,10 @@ class IncidentMemory:
 
     def close(self) -> None:
         """Close the Hindsight client's HTTP session. Call when done, or use `with IncidentMemory(...)`."""
-        self._client.close()
+        try:
+            self._worker.submit(self._client.close).result()
+        finally:
+            self._worker.shutdown()
 
     def __enter__(self) -> "IncidentMemory":
         return self
@@ -101,7 +109,7 @@ class IncidentMemory:
 
     def _call(self, operation: str, fn: Callable[[], T]) -> T:
         try:
-            return fn()
+            return self._worker.submit(fn).result()
         except Exception as exc:
             raise IncidentMemoryError(f"Hindsight {operation} failed for bank {self._bank_id!r}: {exc}") from exc
 
