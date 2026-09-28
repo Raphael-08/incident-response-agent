@@ -17,6 +17,25 @@ Help on-call engineers at ShopFast (a fictional e-commerce platform) resolve pro
 - AC4: The demo shows improvement: a new incident type gets a generic answer first, and a specific, cited answer after its outcome is recorded.
 - AC5: Secrets come only from environment variables. All inputs are validated. LLM errors are handled gracefully.
 
+## Verification (2026-09-28)
+All acceptance criteria were verified in a full manual demo against Hindsight Cloud (bank `shopfast-incidents`) and Groq, with 168 automated tests passing.
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| AC1 | Verified | `DB_POOL_EXHAUST`: checkout returned 503; the agent recalled INC-1042 with its stored source text |
+| AC2 | Verified | Root cause and ordered fix steps cited INC-1042; "restart pods" listed under avoid |
+| AC3 | Verified | Outcome for a `PAYMENT_GATEWAY_TIMEOUT` incident recorded from the UI and retained in Hindsight |
+| AC4 | Verified | First `PAYMENT_GATEWAY_TIMEOUT` analysis: "No similar past incident", low confidence. After the outcome was recorded, the next analysis recalled the new incident with its successful fix and failed attempt |
+| AC5 | Verified | Settings from `.env` only; Pydantic validation on all inputs; on LLM failure the UI shows a warning and still shows recalled memory |
+
+Scenario summary:
+
+| Scenario | Result |
+|---|---|
+| Existing memory (`DB_POOL_EXHAUST`) | Checkout 503, INC-1042 recalled, fix steps generated; checkout 200 after the fault was turned off |
+| New incident type, first time (`PAYMENT_GATEWAY_TIMEOUT`) | Generic answer, low confidence, no memory cited |
+| Learning loop (`PAYMENT_GATEWAY_TIMEOUT`, after outcome) | Newly recorded incident recalled with its fix and failed attempt |
+
 ## Architecture
 ```
                         ┌──────────────────────────────┐
@@ -139,15 +158,31 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 | 2026-09-28 | `5d183c5` | Project skeleton: structure, models, stubs, seed data, tests, docs |
 | 2026-09-28 | `3c83ec9` | Log normalizer, automatic incident IDs, learned patterns interface, demo bank reset |
 | 2026-09-28 | `a51c8c2` | Design doc: final architecture, module status, configuration, embedding proposal, open items |
+| 2026-09-28 | `8643269` | Mark test suite as passing |
 | 2026-09-28 | `8af7835` | Fix input validation (whitespace, required `reported_at`), log normalizer (comma milliseconds, region names), empty `GROQ_MODEL`; 9 regression tests |
+| 2026-09-28 | `6e96114` | README status, progress log and open items |
+| 2026-09-28 | `4906384` | Fix blank or unbounded list items and invalid service names; tests for config, seed data, fault admin, recall query |
+| 2026-09-28 | `a41e734` | Hindsight memory wrapper and seed script; 25 seed incidents loaded into `shopfast-incidents` |
+| 2026-09-28 | `e1e02ce` | Close the Hindsight client session after use |
+| 2026-09-28 | `eebeff6` | Groq advisor and incident service |
+| 2026-09-28 | `4136e4f` | LLM relevance judging (`relevant_incident_ids`), OS trust store for Groq TLS, honor 429 retry-after |
+| 2026-09-28 | `8e8481e` | Streamlit UI: submit, record outcome, learned patterns |
+| 2026-09-28 | `1067c29` | ShopFast shop endpoints with fault behavior |
+| 2026-09-28 | `e3face3` | Run all Hindsight calls on one worker thread (fixes "Timeout context manager should be used inside a task" on the second UI analysis) |
+| 2026-09-28 | (this change) | Demo verification results; AC1-AC5 verified |
 
 ## Open items
 - Decision: embedding options and the Integrate tab.
 - Build order: (done) `agent/memory.py` and seed script, (done) `llm.py` and `service.py`, (done) UI, (done) ShopFast endpoints. All modules built.
 
+## Known limits
+- Groq free tier allows 8000 tokens per minute (about 2 analyses per minute). The advisor waits as long as Groq asks, up to 20 s, then falls back to showing recalled memory.
+- Hindsight calls run one at a time on a single worker thread per `IncidentMemory`. Fine at demo scale.
+- Every recorded outcome is retained permanently. Use a demo bank (`--bank-id shopfast-incidents-demoN`) for rehearsals so the main bank is not filled with repeated demo incidents.
+- UI state lives in the browser session; a page refresh loses analyzed incidents (see future work).
+
 ## Future work
 - Agent learns whether its own suggestions worked (retain suggestion plus result).
 - ShopFast sends alerts to the agent automatically instead of copy-paste.
 - Persist open incidents (SQLite) so a page refresh does not lose them.
-- Fake memory and advisor classes for offline service tests.
 - Eval script: recall hit rate before and after the feedback loop.
