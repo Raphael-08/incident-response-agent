@@ -322,3 +322,47 @@ def test_no_action_offered_means_no_action_proposed():
 def test_llm_may_propose_no_action():
     suggestion = _advisor(FakeGroq(_answer(proposed_action=None))).suggest(_incident(), SIMILAR, [], actions=ACTIONS)
     assert suggestion.proposed_action is None
+
+
+# evidence-grounded proposals
+
+PROVEN_MEMORY = [SimilarIncident(
+    incident_id="INC-1042", summary="Pool exhausted",
+    source_text="Fix steps that worked:\n- rollback_payment_api: Roll back\n"
+                "Fix attempts that did not work:\n- restart_payment_api_pods: Restart (checkout still failing)")]
+ACTIONS3 = ACTIONS + [RemediationAction(name="scale_out_payment_api", description="Add two more payment-api pods")]
+
+
+def test_prompt_includes_verified_action_evidence():
+    client = FakeGroq(_answer(proposed_action="rollback_payment_api", action_reason="Worked in INC-1042"))
+    _advisor(client).suggest(_incident(), PROVEN_MEMORY, [], actions=ACTIONS3)
+    user = client.calls[0]["messages"][1]["content"]
+    assert "<evidence>" in user
+    assert "rollback_payment_api: worked in INC-1042" in user
+    assert "restart_payment_api_pods: failed in INC-1042" in user
+
+
+@pytest.mark.parametrize("bad_action", ["scale_out_payment_api", "restart_payment_api_pods"],
+                         ids=["ignores-proven-fix", "repeats-failed-fix"])
+def test_proposal_against_verified_evidence_is_retried(bad_action):
+    bad = _answer(proposed_action=bad_action, action_reason="guess")
+    good = _answer(proposed_action="rollback_payment_api", action_reason="Worked in INC-1042")
+    client = FakeGroq(bad, good)
+    suggestion = _advisor(client).suggest(_incident(), PROVEN_MEMORY, [], actions=ACTIONS3)
+    assert suggestion.proposed_action == "rollback_payment_api"
+    assert "rollback_payment_api" in client.calls[1]["messages"][-1]["content"]
+
+
+def test_evidence_from_unrelated_incidents_does_not_constrain():
+    answer = {**GENERIC, "proposed_action": "scale_out_payment_api", "action_reason": "r"}
+    client = FakeGroq(answer)
+    suggestion = _advisor(client).suggest(_incident(), PROVEN_MEMORY, [], actions=ACTIONS3)
+    assert suggestion.proposed_action == "scale_out_payment_api"
+    assert len(client.calls) == 1
+
+
+def test_proven_fix_already_tried_no_longer_required():
+    answer = _answer(proposed_action="scale_out_payment_api", action_reason="r")
+    client = FakeGroq(answer)
+    _advisor(client).suggest(_incident(), PROVEN_MEMORY, [], actions=ACTIONS3, tried_actions=["rollback_payment_api"])
+    assert len(client.calls) == 1

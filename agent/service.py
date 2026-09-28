@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 
 from agent.actions import ShopFastClient, ShopFastError
+from agent.evidence import action_evidence
 from agent.intake import incident_from_alert
 from agent.llm import IncidentAdvisor, LLMError
 from agent.memory import IncidentMemory, IncidentMemoryError
@@ -72,20 +73,30 @@ class IncidentService:
             patterns = self._memory.recall_learned_patterns(incident)
         except IncidentMemoryError:
             patterns = []
-        try:
-            if self._shop is None:
+        if self._shop is None:
+            try:
                 return self._advisor.suggest(incident, similar, patterns)
-            return self._advisor.suggest(incident, similar, patterns, actions=self._actions(),
-                                         tried_actions=list(tried_actions))
+            except LLMError as exc:
+                return self._memory_only(similar, patterns, exc)
+        actions = self._actions()
+        try:
+            suggestion = self._advisor.suggest(incident, similar, patterns, actions=actions,
+                                               tried_actions=list(tried_actions))
         except LLMError as exc:
-            return Suggestion(
-                similar_incidents=similar,
-                learned_patterns=patterns,
-                probable_root_cause=LLM_UNAVAILABLE,
-                confidence="low",
-                memory_used=bool(similar),
-                llm_error=str(exc),
-            )
+            suggestion = self._memory_only(similar, patterns, exc)
+        evidence = action_evidence(suggestion.similar_incidents, [a.name for a in actions])
+        return suggestion.model_copy(update={"action_evidence": evidence})
+
+    @staticmethod
+    def _memory_only(similar, patterns, exc: LLMError) -> Suggestion:
+        return Suggestion(
+            similar_incidents=similar,
+            learned_patterns=patterns,
+            probable_root_cause=LLM_UNAVAILABLE,
+            confidence="low",
+            memory_used=bool(similar),
+            llm_error=str(exc),
+        )
 
     def remediate(self, incident: Incident, suggestion: Suggestion, approved: bool,
                   previous_attempts: Sequence[RemediationAttempt] = ()) -> RemediationAttempt:

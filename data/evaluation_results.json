@@ -1,0 +1,147 @@
+{
+  "generated_at": "2026-09-28T13:51:14Z",
+  "summary": {
+    "incidents": 4,
+    "relevant_recall_before": 0,
+    "relevant_recall_after": 3,
+    "learned_incident_recalled_after": 3,
+    "proven_fix_proposed_first_after": 2,
+    "resolved_before": 2,
+    "resolved_after": 3,
+    "first_try_fix_before": 2,
+    "first_try_fix_after": 3,
+    "attempts_before": 3,
+    "attempts_after": 3,
+    "failed_fixes_before": 1,
+    "failed_fixes_avoided_after": 1,
+    "llm_errors": 0,
+    "approvals": "given by the evaluation harness"
+  },
+  "incidents": [
+    {
+      "fault": "DB_POOL_EXHAUST",
+      "before": {
+        "fault": "DB_POOL_EXHAUST",
+        "incident_id": "INC-26092813465001",
+        "memory_used": false,
+        "relevant_incidents": [],
+        "actions_tried": [
+          "restart_payment_api_pods"
+        ],
+        "resolved": false,
+        "llm_errors": 0,
+        "attempts": 1
+      },
+      "after": {
+        "fault": "DB_POOL_EXHAUST",
+        "incident_id": "INC-26092813492568",
+        "memory_used": true,
+        "relevant_incidents": [
+          "INC-26092813465001"
+        ],
+        "actions_tried": [
+          "rollback_payment_api"
+        ],
+        "resolved": true,
+        "llm_errors": 0,
+        "attempts": 1
+      },
+      "recalled_learned_incident": true,
+      "proposed_proven_fix_first": false,
+      "failed_fixes_avoided": [
+        "restart_payment_api_pods"
+      ]
+    },
+    {
+      "fault": "REDIS_TIMEOUT",
+      "before": {
+        "fault": "REDIS_TIMEOUT",
+        "incident_id": "INC-26092813474385",
+        "memory_used": false,
+        "relevant_incidents": [],
+        "actions_tried": [],
+        "resolved": false,
+        "llm_errors": 0,
+        "attempts": 0
+      },
+      "after": {
+        "fault": "REDIS_TIMEOUT",
+        "incident_id": "INC-26092813495222",
+        "memory_used": false,
+        "relevant_incidents": [],
+        "actions_tried": [],
+        "resolved": false,
+        "llm_errors": 0,
+        "attempts": 0
+      },
+      "recalled_learned_incident": false,
+      "proposed_proven_fix_first": false,
+      "failed_fixes_avoided": []
+    },
+    {
+      "fault": "AUTH_TOKEN_EXPIRED",
+      "before": {
+        "fault": "AUTH_TOKEN_EXPIRED",
+        "incident_id": "INC-26092813480976",
+        "memory_used": false,
+        "relevant_incidents": [],
+        "actions_tried": [
+          "resync_gateway_clocks"
+        ],
+        "resolved": true,
+        "llm_errors": 0,
+        "attempts": 1
+      },
+      "after": {
+        "fault": "AUTH_TOKEN_EXPIRED",
+        "incident_id": "INC-26092813501758",
+        "memory_used": true,
+        "relevant_incidents": [
+          "INC-26092813480976"
+        ],
+        "actions_tried": [
+          "resync_gateway_clocks"
+        ],
+        "resolved": true,
+        "llm_errors": 0,
+        "attempts": 1
+      },
+      "recalled_learned_incident": true,
+      "proposed_proven_fix_first": true,
+      "failed_fixes_avoided": []
+    },
+    {
+      "fault": "PAYMENT_GATEWAY_TIMEOUT",
+      "before": {
+        "fault": "PAYMENT_GATEWAY_TIMEOUT",
+        "incident_id": "INC-26092813484104",
+        "memory_used": false,
+        "relevant_incidents": [],
+        "actions_tried": [
+          "raise_payment_gateway_timeout"
+        ],
+        "resolved": true,
+        "llm_errors": 0,
+        "attempts": 1
+      },
+      "after": {
+        "fault": "PAYMENT_GATEWAY_TIMEOUT",
+        "incident_id": "INC-26092813504699",
+        "memory_used": true,
+        "relevant_incidents": [
+          "INC-26092813484104"
+        ],
+        "actions_tried": [
+          "raise_payment_gateway_timeout"
+        ],
+        "resolved": true,
+        "llm_errors": 0,
+        "attempts": 1
+      },
+      "recalled_learned_incident": true,
+      "proposed_proven_fix_first": true,
+      "failed_fixes_avoided": []
+    }
+  ],
+  "bank_id": "shopfast-incidents-eval2"
+}

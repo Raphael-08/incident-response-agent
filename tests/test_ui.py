@@ -305,3 +305,67 @@ def test_detected_incident_goes_through_the_approval_gate():
 def test_manual_form_is_still_available():
     at = _app(FakeService())
     assert at.text_input(key="service_name") and at.button(key="analyze")
+
+
+# learning evidence
+
+import json  # noqa: E402
+
+from agent.models import ActionEvidence  # noqa: E402
+
+EVIDENCE = [
+    ActionEvidence(action="rollback_payment_api", worked_in=["INC-26092810000001", "INC-26092812000003"]),
+    ActionEvidence(action="restart_payment_api_pods", failed_in=["INC-26092810000001"]),
+]
+
+
+def test_evidence_shows_counts_and_incident_ids_from_memory():
+    at = _submit(_app(FakeService(_with_action(action_evidence=EVIDENCE))))
+    text = _all_text(at)
+    assert "rollback_payment_api: worked in 2 of 2 recorded attempts" in text
+    assert "restart_payment_api_pods: failed in 1 of 1 recorded attempts" in text
+    assert "INC-26092812000003" in text
+    assert "Last learned from INC-26092812000003" in text
+
+
+def test_no_evidence_is_stated_not_invented():
+    at = _submit(_app(FakeService(_with_action())))
+    assert "no verified action outcomes in memory" in _all_text(at).lower()
+
+
+def test_learned_tab_keeps_patterns_and_adds_evidence():
+    at = _submit(_app(FakeService(_with_action(action_evidence=EVIDENCE))))
+    text = _all_text(at)
+    assert "Restarting pods never fixes pool exhaustion" in text  # Hindsight patterns stay
+    assert text.count("rollback_payment_api: worked in 2 of 2") == 2  # analysis view and learned tab
+
+
+def _eval_file(tmp_path):
+    path = tmp_path / "evaluation_results.json"
+    path.write_text(json.dumps({"generated_at": "2026-09-28T12:00:00Z", "summary": {
+        "incidents": 4, "relevant_recall_before": 0, "relevant_recall_after": 4,
+        "learned_incident_recalled_after": 4, "proven_fix_proposed_first_after": 3,
+        "resolved_before": 4, "resolved_after": 4, "first_try_fix_before": 1, "first_try_fix_after": 3,
+        "attempts_before": 8, "attempts_after": 5, "failed_fixes_before": 4, "failed_fixes_avoided_after": 4,
+        "llm_errors": 0, "approvals": "given by the evaluation harness"}}))
+    return path
+
+
+def test_learned_tab_shows_before_after_evaluation(tmp_path):
+    at = AppTest.from_file(APP, default_timeout=10)
+    at.session_state["service"] = FakeService()
+    at.session_state["eval_results_path"] = str(_eval_file(tmp_path))
+    at.run()
+    text = _all_text(at)
+    assert "Relevant past incident recalled: 0/4 before, 4/4 after" in text
+    assert "Fixed on the first action: 1/4 before, 3/4 after" in text
+    assert "Actions needed: 8 before, 5 after" in text
+    assert "Failed fixes avoided after learning: 4 of 4" in text
+
+
+def test_learned_tab_explains_how_to_run_evaluation_when_missing(tmp_path):
+    at = AppTest.from_file(APP, default_timeout=10)
+    at.session_state["service"] = FakeService()
+    at.session_state["eval_results_path"] = str(tmp_path / "missing.json")
+    at.run()
+    assert "scripts.evaluate_learning" in _all_text(at)

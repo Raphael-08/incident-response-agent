@@ -69,6 +69,8 @@ Scenario summary:
 | `agent/actions.py` | ShopFast tool client: list and run allow-listed actions, health checks | Done, tested |
 | `agent/intake.py` | ShopFast alert -> Incident | Done, tested |
 | `shopfast/alerts.py` | Bounded log of failure alerts | Done, tested |
+| `agent/evidence.py` | Worked/failed counts per action from recorded outcomes | Done, tested |
+| `scripts/evaluate_learning.py` | Before-vs-after learning evaluation | Done, tested, run |
 | `shopfast/remediations.py` | Simulated runbook actions, including decoys | Done, tested |
 | `ui/app.py` | Streamlit UI, 3 tabs, example fault logs, text-only rendering of incident and LLM text | Done, tested with AppTest |
 | `scripts/seed_memory.py` | Validate seed data, `--bank-id`, load into Hindsight | Done, tested |
@@ -86,6 +88,12 @@ The agent can act, but only through an allow-listed, human-approved runbook.
 5. The next similar incident recalls that outcome.
 
 Safety: actions are simulated in ShopFast (`shopfast/remediations.py`), some are decoys that fix nothing, and the agent never sees which fault an action fixes. The agent's client (`agent/actions.py`) cannot reach `/admin/faults`. Every decision is kept in an action log (action, reason, approved or rejected, verification result).
+
+## Measurable learning
+- Learning evidence (`agent/evidence.py`): for the incidents the agent judged relevant, it reads the stored outcome text Hindsight recalls and counts, per allow-listed action, the incidents where it worked or failed ("rollback_payment_api: worked in 2 of 2 recorded attempts (INC-..., INC-...)"). Only action names inside the recorded "Fix steps that worked" / "Fix attempts that did not work" sections count, so every number traces to a verified outcome; seed incidents add none. Shown under each analysis and in the "What the agent has learned" tab, next to the unchanged Hindsight consolidated patterns.
+- Evaluation (`scripts/evaluate_learning.py`): replays each fault through detect -> analyze -> remediate -> verify -> record, first on an empty bank (before), then again after the outcomes are recorded (after). Reports relevant recalls, proven fix proposed first, first-action fixes, actions needed and failed fixes avoided; saves `data/evaluation_results.json`, which the UI shows. The harness approves every proposal (labelled in the report); the UI keeps the human approval gate. It refuses the main bank.
+- Evidence also grounds proposals: the LLM sees the same verified outcomes, and a proposal is rejected and retried if, for incidents it judged relevant, it repeats an action that only failed or ignores an action that worked.
+- Latest run (bank `shopfast-incidents-eval2`, 4 faults, final code): relevant recall 0/4 before, 3/4 after; resolved 2/4 before, 3/4 after; first-action fixes 2/4 before, 3/4 after; failed fixes avoided 1 of 1. `REDIS_TIMEOUT` got no proposal in either round (the LLM judged no listed action to fit), so nothing was learned for it. A first run on the pre-guard code gave relevant recall 0/4 -> 3/4, resolved 3/4 -> 4/4, first-action fixes 2/4 -> 4/4. Results vary run to run: 4 incidents, one run each.
 
 ## Configuration
 `.env` (git-ignored) holds:
@@ -188,7 +196,8 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 | 2026-09-28 | `e3face3` | Run all Hindsight calls on one worker thread (fixes "Timeout context manager should be used inside a task" on the second UI analysis) |
 | 2026-09-28 | `fbd313a` | Demo verification results; AC1-AC5 verified |
 | 2026-09-28 | `bae7c4e` | Act -> verify -> learn: allow-listed runbook actions, human approval, verification, automatic outcome recording |
-| 2026-09-28 | (this change) | Automatic incident intake: ShopFast alerts, Detect button, manual form kept as fallback |
+| 2026-09-28 | `6a3501e` | Automatic incident intake: ShopFast alerts, Detect button, manual form kept as fallback |
+| 2026-09-28 | (this change) | Measurable learning: evidence from recorded outcomes, before-vs-after evaluation |
 
 ## Open items
 - Decision: embedding options and the Integrate tab.

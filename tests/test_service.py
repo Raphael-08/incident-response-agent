@@ -238,3 +238,47 @@ def test_memory_failure_after_action_keeps_the_executed_attempt():
     assert shop.ran == ["rollback_payment_api"]
     assert (attempt.executed, attempt.verified) == (True, True)
     assert "not recorded" in attempt.error and "hindsight down" in attempt.error
+
+
+# learning evidence
+
+RECORDED = SimilarIncident(
+    incident_id="INC-26092810000001", summary="Pool exhausted",
+    source_text="Fix steps that worked:\n- rollback_payment_api: Roll back\n"
+                "Fix attempts that did not work:\n- restart_payment_api_pods: Restart (checkout still failing)")
+UNRELATED = SimilarIncident(
+    incident_id="INC-26092810000002", summary="Redis",
+    source_text="Fix steps that worked:\n- restart_payment_api_pods: Restart")
+
+
+class RelevantOnlyAdvisor(ActionAdvisor):
+    """Judges only RECORDED relevant, like the real advisor filtering recall."""
+
+    def suggest(self, incident, similar, patterns, actions=(), tried_actions=()):
+        suggestion = super().suggest(incident, similar, patterns, actions, tried_actions)
+        return suggestion.model_copy(update={"similar_incidents": [s for s in similar if s is RECORDED]})
+
+
+def test_analyze_attaches_evidence_from_relevant_recorded_outcomes_only():
+    memory = FakeMemory(similar=[RECORDED, UNRELATED])
+    suggestion = IncidentService(memory, RelevantOnlyAdvisor(), shop=FakeShop()).analyze_incident(INCIDENT)
+    evidence = {e.action: e for e in suggestion.action_evidence}
+    assert evidence["rollback_payment_api"].worked_in == ["INC-26092810000001"]
+    assert evidence["restart_payment_api_pods"].failed_in == ["INC-26092810000001"]
+    assert evidence["restart_payment_api_pods"].worked_in == []  # UNRELATED was judged not relevant
+
+
+def test_llm_failure_still_shows_evidence_from_recalled_memory():
+    memory = FakeMemory(similar=[RECORDED])
+    class DownAdvisor(ActionAdvisor):
+        def suggest(self, *args, **kwargs):
+            raise LLMError("down")
+
+    service = IncidentService(memory, DownAdvisor(), shop=FakeShop())
+    suggestion = service.analyze_incident(INCIDENT)
+    assert [e.action for e in suggestion.action_evidence] == ["rollback_payment_api", "restart_payment_api_pods"]
+
+
+def test_no_evidence_without_shopfast_allow_list():
+    suggestion = IncidentService(FakeMemory(similar=[RECORDED]), FakeAdvisor()).analyze_incident(INCIDENT)
+    assert suggestion.action_evidence == []

@@ -5,6 +5,7 @@ Incident text and LLM output go through st.text or st.code only, never markdown,
 LLM reply cannot render links or images.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from agent.memory import IncidentMemory, IncidentMemoryError  # noqa: E402
 from agent.models import Incident, Outcome, RemediationAttempt, Severity, Suggestion  # noqa: E402
 from agent.service import IncidentService  # noqa: E402
 from shopfast.faults import FAULT_LOGS, Fault  # noqa: E402
+
+EVAL_RESULTS = Path(__file__).resolve().parent.parent / "data" / "evaluation_results.json"
 
 
 @st.cache_resource
@@ -73,6 +76,8 @@ def show_suggestion(incident: Incident, suggestion: Suggestion) -> None:
         st.markdown("**Avoid (failed before)**")
         for step in suggestion.avoid_steps:
             st.text(f"- {step}")
+
+    show_evidence(suggestion)
 
     if suggestion.similar_incidents:
         st.subheader("Similar past incidents")
@@ -165,6 +170,42 @@ def detect(service: IncidentService) -> None:
     analyze(service, incident)
 
 
+def evidence_line(action: str, worked: list[str], failed: list[str]) -> str:
+    total = len(worked) + len(failed)
+    parts = [f"worked in {len(worked)} of {total}"] if worked else []
+    parts += [f"failed in {len(failed)} of {total}"] if failed else []
+    return f"{action}: {', '.join(parts)} recorded attempts ({', '.join(worked + failed)})"
+
+
+def show_evidence(suggestion: Suggestion) -> None:
+    """Counts come only from outcomes the agent recorded after verification and Hindsight recalled."""
+    st.markdown("**Learning evidence (verified outcomes in memory)**")
+    if not suggestion.action_evidence:
+        st.caption("No verified action outcomes in memory for this incident yet.")
+        return
+    for evidence in suggestion.action_evidence:
+        st.text(evidence_line(evidence.action, evidence.worked_in, evidence.failed_in))
+    latest = max((e.latest for e in suggestion.action_evidence), key=lambda i: int(i.removeprefix("INC-")))
+    st.caption(f"Last learned from {latest}")
+
+
+def show_evaluation(path: Path) -> None:
+    st.subheader("Before vs after learning (evaluation)")
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+        s = report["summary"]
+    except (OSError, ValueError, KeyError):
+        st.info("No evaluation yet. Run: python -m scripts.evaluate_learning --bank-id shopfast-incidents-eval1")
+        return
+    n = s["incidents"]
+    st.text(f"Relevant past incident recalled: {s['relevant_recall_before']}/{n} before, {s['relevant_recall_after']}/{n} after")
+    st.text(f"Proven fix proposed first: {s['proven_fix_proposed_first_after']}/{n} after")
+    st.text(f"Fixed on the first action: {s['first_try_fix_before']}/{n} before, {s['first_try_fix_after']}/{n} after")
+    st.text(f"Actions needed: {s['attempts_before']} before, {s['attempts_after']} after")
+    st.text(f"Failed fixes avoided after learning: {s['failed_fixes_avoided_after']} of {s['failed_fixes_before']}")
+    st.caption(f"{n} controlled ShopFast incidents, run {report.get('generated_at', '')}; approvals {s['approvals']}.")
+
+
 def submit_tab(service: IncidentService) -> None:
     st.caption("The agent probes ShopFast, opens an incident from its latest failure and investigates it.")
     if st.button("Detect latest ShopFast incident", key="detect_incident", type="primary"):
@@ -246,11 +287,13 @@ def outcome_tab(service: IncidentService) -> None:
 
 
 def learned_tab() -> None:
+    show_evaluation(Path(st.session_state.get("eval_results_path", EVAL_RESULTS)))
     last_id = st.session_state.get("last_id")
     if not last_id:
         st.info("Analyze an incident to see what the agent has learned about it.")
         return
     incident, suggestion = st.session_state["incidents"][last_id]
+    show_evidence(suggestion)
     st.caption(f"Patterns Hindsight consolidated across past incidents, relevant to {incident.incident_id}")
     if not suggestion.learned_patterns:
         st.info("No learned patterns yet for this kind of incident.")

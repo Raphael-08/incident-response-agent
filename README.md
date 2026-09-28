@@ -46,10 +46,11 @@ Never commit `.env`.
 ## Run
 ```bash
 python -m scripts.seed_memory                              # load seed incidents into Hindsight
+python -m scripts.evaluate_learning --bank-id shopfast-incidents-eval1   # before-vs-after learning evaluation (fresh bank)
 uvicorn shopfast.app:app --host 127.0.0.1 --port 8001      # mock shop
 streamlit run ui/app.py                                    # agent UI
 pytest                                                     # tests
 ```
 
 ## Status
-All modules are built and tested (239 tests passing): config, models, log normalizer, Hindsight memory, seed script, Groq advisor, service, Streamlit UI and the ShopFast mock shop. The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.
+All modules are built and tested (262 tests passing): config, models, log normalizer, Hindsight memory, seed script, Groq advisor, service, Streamlit UI and the ShopFast mock shop. The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.

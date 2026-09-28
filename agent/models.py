@@ -115,6 +115,19 @@ class ShopFastAlert(BaseModel):
     count: int = Field(ge=1)
 
 
+class ActionEvidence(BaseModel):
+    """How a runbook action fared in outcomes the agent recorded after verification (read from memory, not guessed)."""
+
+    action: str
+    worked_in: list[str] = Field(default_factory=list)  # incident IDs where the action restored health
+    failed_in: list[str] = Field(default_factory=list)  # incident IDs where checkout was still failing after it
+
+    @property
+    def latest(self) -> str:
+        """Newest incident this evidence comes from (generated IDs sort by time)."""
+        return max(self.worked_in + self.failed_in, key=lambda i: int(i.removeprefix("INC-")))
+
+
 class Suggestion(BaseModel):
     """The agent's answer for a new incident."""
 
@@ -128,3 +141,4 @@ class Suggestion(BaseModel):
     llm_error: str | None = None  # set when the LLM failed; recalled memory is still returned
     proposed_action: str | None = None  # allow-listed runbook action; runs only after human approval
     action_reason: str = ""
+    action_evidence: list[ActionEvidence] = Field(default_factory=list)
