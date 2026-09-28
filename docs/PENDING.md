@@ -7,10 +7,20 @@ Hey team, here's where we stand. The code is done and ready for the demo. I've o
 | # | Item | Who | Notes |
 | --- | --- | --- | --- |
 | 1 | Demo video | | I wrote a 3-minute script in `docs/DEMO.md`. Please record it on a fresh demo bank, not the main one. |
-| 2 | Article, social post and video for each of us | Everyone | The rules say every team member has to do all three. Check the official content guide for the format. I have drafts for mine; happy to share them as a starting point. |
+| 2 | Article, social post and video for each of us | Everyone | The rules say every team member has to do all three. Check the official content guide for the format. My drafts are in the repo, see "My content drafts" below; feel free to use them as a starting point. |
 | 3 | Live demo to the judges | | Let's rehearse `docs/DEMO.md` end to end at least twice. The script has backup lines in case Groq or Hindsight is slow. |
 | 4 | How we use Hindsight memory | | Already written up in the README and the project overview. Just check it still matches what we show in the demo. |
 | 5 | Clean, documented repo | Sanjana | Merge my two PRs, then read the README top to bottom once. |
+
+### My content drafts
+I've put my drafts in the repo (on my PR #2 branch until it is merged, then under `docs/content/` on main) so you can see the angle I took and reuse the structure. Please write your own in your voice and from what you built; the judges will read all of them.
+
+| Draft | What's in it |
+| --- | --- |
+| [Article](https://github.com/Raphael-08/incident-response-agent/blob/feat/more-faults-persistence-directives/docs/content/article-draft.md) (`docs/content/article-draft.md`) | The story of my part: learning from engineers, reflect postmortems, the living runbook, the learning curve against a memory-off baseline, and MCP for other agents |
+| [Social post and video script](https://github.com/Raphael-08/incident-response-agent/blob/feat/more-faults-persistence-directives/docs/content/social-and-video-drafts.md) (`docs/content/social-and-video-drafts.md`) | A LinkedIn/X post and a 60-90 s video script, shot by shot |
+
+Before any of us publishes: swap in the repo link, check the numbers against the final learning-curve run, and follow the official content guide.
 
 ## 2. One video I parked: Claude Code using our agent
 I'd love a short screen recording (30-60 s) of Claude Code fixing ShopFast through our MCP server. It shows that any AI agent can use our memory, which is a strong point for innovation. I parked it because it needs someone to record it. Here's how:
