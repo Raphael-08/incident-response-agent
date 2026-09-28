@@ -142,7 +142,7 @@ Both sit on `agent/desk.py`, which keeps open incidents by ID (bounded, 200) so 
 - Learn: `record_outcome` calls `retain` with the new incident and its outcome, including failed attempts.
 
 ## Incident IDs
-Generated automatically when not supplied: `INC-` + UTC timestamp `yymmddHHMMSS` + 2 random digits (for example `INC-26092814301207`). Seed incidents keep short IDs (`INC-1042`). Pattern: `^INC-\d{4,16}$`.
+Generated automatically when not supplied: `INC-` + UTC timestamp `yymmddHHMMSS` + 4 random digits (for example `INC-2609281430120734`; 2 digits collided about 1 in 100 when two incidents opened in the same second). Seed incidents keep short IDs (`INC-1042`). Pattern: `^INC-\d{4,16}$`.
 
 ## Demo reset
 The Hindsight SDK does not document a bank delete call, and deleting memory is irreversible. Instead, each demo run uses a fresh bank:

@@ -17,9 +17,9 @@ Step = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 
 
 def new_incident_id() -> str:
-    """Generate an ID like INC-26092814301207: UTC timestamp plus 2 random digits."""
+    """Generate an ID like INC-2609281430120734: UTC timestamp plus 4 random digits, so two incidents opened in the same second do not collide."""
     stamp = datetime.now(timezone.utc).strftime("%y%m%d%H%M%S")
-    return f"INC-{stamp}{secrets.randbelow(100):02d}"
+    return f"INC-{stamp}{secrets.randbelow(10_000):04d}"
 
 
 class Severity(str, Enum):
