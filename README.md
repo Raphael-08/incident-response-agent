@@ -50,4 +50,4 @@ pytest                                                     # tests
 ```
 
 ## Status
-In progress. Config, models, log normalizer, fault switches, seed data, Hindsight memory wrapper and seed script are done and tested (91 tests passing). LLM advisor, service, ShopFast shop endpoints and UI still have TODOs for each owner; see the task split in `docs/DESIGN.md`.
+In progress. Config, models, log normalizer, fault switches, seed data, Hindsight memory wrapper, seed script, LLM advisor and service are done and tested (119 tests passing). ShopFast shop endpoints and UI still have TODOs for each owner; see the task split in `docs/DESIGN.md`.

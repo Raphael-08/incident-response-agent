@@ -91,3 +91,4 @@ class Suggestion(BaseModel):
     avoid_steps: list[Step] = Field(default_factory=list)
     confidence: str = Field(pattern=r"^(low|medium|high)$")
     memory_used: bool
+    llm_error: str | None = None  # set when the LLM failed; recalled memory is still returned

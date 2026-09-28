@@ -43,8 +43,8 @@ Help on-call engineers at ShopFast (a fictional e-commerce platform) resolve pro
 | `agent/models.py` | Pydantic models; all input validation; incident ID generation | Done |
 | `agent/log_normalizer.py` | Strip noise from logs before recall | Done, tested |
 | `agent/memory.py` | Hindsight `create_bank`, `retain`, `recall`, learned patterns | Done, tested with fake client |
-| `agent/llm.py` | Groq call, JSON output, retries, `LLMError` | Interface only |
-| `agent/service.py` | `analyze_incident`, `record_outcome` | Interface only |
+| `agent/llm.py` | Groq call, JSON output, retries, `LLMError`, delimited untrusted input, citation check | Done, tested with fake client |
+| `agent/service.py` | `analyze_incident`, `record_outcome`; returns memory when LLM fails | Done, tested with fakes |
 | `shopfast/faults.py` | Fault switches and their log lines | Done |
 | `shopfast/app.py` | Mock shop endpoints; `/admin/faults` | Admin done, shop endpoints stubbed |
 | `ui/app.py` | Streamlit UI, 3 tabs | Placeholder |
@@ -140,8 +140,10 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 | 2026-09-28 | `8af7835` | Fix input validation (whitespace, required `reported_at`), log normalizer (comma milliseconds, region names), empty `GROQ_MODEL`; 9 regression tests |
 
 ## Open items
+- Groq TLS fails on machines whose antivirus or proxy intercepts HTTPS (seen: Avast Web Shield); certifi lacks its root.
+- AC4 at risk: recall always returns nearest incidents, so a new failure type is not reported as "no similar incident". Reranker scores are not calibrated enough for a fixed threshold.
 - Decision: embedding options and the Integrate tab.
-- Build order: (done) `agent/memory.py` and seed script, then `llm.py` and `service.py`, then UI, then ShopFast endpoints.
+- Build order: (done) `agent/memory.py` and seed script, (done) `llm.py` and `service.py`, then UI, then ShopFast endpoints.
 
 ## Future work
 - Agent learns whether its own suggestions worked (retain suggestion plus result).
@@ -149,4 +151,3 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 - Persist open incidents (SQLite) so a page refresh does not lose them.
 - Fake memory and advisor classes for offline service tests.
 - Eval script: recall hit rate before and after the feedback loop.
-- Treat error logs as untrusted input in the LLM prompt (delimiters, data-only instruction).
