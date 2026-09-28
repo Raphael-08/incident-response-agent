@@ -13,7 +13,7 @@ When production breaks, the agent:
 
 Other agents can use it too: an MCP server (Claude Code, Cursor) and a REST API expose the same flow and memory. Open incidents are kept in SQLite, so a page refresh or a restart loses nothing.
 
-Shareable summaries: [project overview](docs/PROJECT_OVERVIEW.md), [pending work](docs/PENDING.md) and content drafts for the article, social post and video ([docs/content/](docs/content/)). PDFs of both: `uv run --no-project --with markdown --with pytest --python .venv/Scripts/python.exe python -m scripts.build_reports` (written to `share/`).
+Shareable summaries: [project overview](docs/PROJECT_OVERVIEW.md), [pending work](docs/PENDING.md) and templates for each member's article, social post and video ([docs/content/](docs/content/)). PDFs of both: `uv run --no-project --with markdown --with pytest --python .venv/Scripts/python.exe python -m scripts.build_reports` (written to `share/`).
 
 See [docs/DESIGN.md](docs/DESIGN.md) for architecture, data model, and task split.
 
