@@ -76,6 +76,9 @@ Scenario summary:
 | `scripts/seed_memory.py` | Validate seed data, `--bank-id`, load into Hindsight | Done, tested |
 | `data/seed_incidents.json` | 25 synthetic incidents | Done |
 
+## Storefront (demo layer)
+`storefront/` is a customer-facing page on port 8003: products, cart, checkout and a status bar. Its server forwards only `GET /products`, `POST /cart/items` and `POST /checkout` to ShopFast and returns ShopFast's status code and body unchanged, so every error shown is ShopFast's own. `/admin` and `/ops` are not forwarded, so the page cannot change faults or run actions. Same-origin forwarding means ShopFast needs no CORS change. The status bar is derived from the page's own responses; it is not a second monitor. ShopFast and the agent are unchanged.
+
 ## Automatic incident intake
 ShopFast records every fault-caused failure as an alert (`shopfast/alerts.py`; `GET /ops/incidents/latest`: time, endpoint, status, error, log line, repeat count). "Detect latest ShopFast incident" in the UI calls `IncidentService.detect_incident`: the agent probes the shop's public endpoints like a monitor; if one fails, it fetches the latest alert and `agent/intake.py` turns it into an `Incident` (service from the log line, SEV1 for `/checkout` and `/login`, title and symptoms from the alert, raw log as error log). A healthy shop yields no incident, so an alert from an already fixed failure is never imported. The detected incident is analyzed immediately and then follows the same approval gate. Manual entry stays as a fallback.
 

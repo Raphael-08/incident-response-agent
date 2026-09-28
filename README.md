@@ -20,6 +20,7 @@ See [docs/DESIGN.md](docs/DESIGN.md) for architecture, data model, and task spli
 ```
 agent/      config, models, Hindsight memory wrapper, Groq advisor, service
 shopfast/   mock e-commerce API with fault switches
+storefront/ customer-facing ShopFast page (demo layer over the ShopFast API)
 ui/         Streamlit UI
 data/       synthetic seed incidents
 scripts/    seed script
@@ -47,10 +48,11 @@ Never commit `.env`.
 ```bash
 python -m scripts.seed_memory                              # load seed incidents into Hindsight
 python -m scripts.evaluate_learning --bank-id shopfast-incidents-eval1   # before-vs-after learning evaluation (fresh bank)
-uvicorn shopfast.app:app --host 127.0.0.1 --port 8001      # mock shop
+uvicorn shopfast.app:app --host 127.0.0.1 --port 8001      # mock shop API
+uvicorn storefront.app:app --host 127.0.0.1 --port 8003    # storefront: http://127.0.0.1:8003
 streamlit run ui/app.py                                    # agent UI
 pytest                                                     # tests
 ```
 
 ## Status
-All modules are built and tested (262 tests passing): config, models, log normalizer, Hindsight memory, seed script, Groq advisor, service, Streamlit UI and the ShopFast mock shop. The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.
+All modules are built and tested (278 tests passing): config, models, log normalizer, Hindsight memory, seed script, Groq advisor, service, Streamlit UI and the ShopFast mock shop. The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.
