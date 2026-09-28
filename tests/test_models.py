@@ -3,7 +3,7 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from agent.models import INCIDENT_ID_PATTERN, Incident, MAX_LOG_CHARS
+from agent.models import INCIDENT_ID_PATTERN, HistoricalIncident, Incident, MAX_LOG_CHARS, Outcome
 from scripts.seed_memory import load_seed_incidents
 from shopfast.faults import Fault, FaultRegistry
 
@@ -59,3 +59,21 @@ def test_fault_registry_toggle():
     assert registry.is_active(Fault.REDIS_TIMEOUT)
     registry.disable(Fault.REDIS_TIMEOUT)
     assert registry.active() == []
+
+
+@pytest.mark.parametrize("field", ["title", "symptoms"])
+@pytest.mark.parametrize("value", ["     ", "  ab  "])
+def test_incident_text_too_short_after_strip_rejected(field, value):
+    with pytest.raises(ValidationError):
+        Incident.model_validate(_incident(**{field: value}))
+
+
+def test_outcome_whitespace_root_cause_rejected():
+    with pytest.raises(ValidationError):
+        Outcome.model_validate({"incident_id": "INC-2001", "resolved": True, "actual_root_cause": "     "})
+
+
+def test_historical_incident_requires_reported_at():
+    record = load_seed_incidents()[0].model_dump(exclude={"reported_at"})
+    with pytest.raises(ValidationError):
+        HistoricalIncident.model_validate(record)

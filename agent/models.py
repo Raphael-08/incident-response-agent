@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime, timezone
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 MAX_LOG_CHARS = 8000
 MAX_TEXT_CHARS = 2000
@@ -26,6 +26,9 @@ class Severity(str, Enum):
 class Incident(BaseModel):
     """A new incident submitted by an engineer. The ID is generated when not supplied."""
 
+    # Strip before length checks, so whitespace cannot satisfy min_length.
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     incident_id: str = Field(default_factory=new_incident_id, pattern=INCIDENT_ID_PATTERN)
     service: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9-]+$")
     severity: Severity
@@ -34,14 +37,11 @@ class Incident(BaseModel):
     error_log: str = Field(default="", max_length=MAX_LOG_CHARS)
     reported_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    @field_validator("title", "symptoms", "error_log")
-    @classmethod
-    def strip_whitespace(cls, value: str) -> str:
-        return value.strip()
-
 
 class Outcome(BaseModel):
     """What actually happened after the engineer worked on the incident."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
 
     incident_id: str = Field(pattern=INCIDENT_ID_PATTERN)
     resolved: bool
@@ -53,6 +53,8 @@ class Outcome(BaseModel):
 
 class HistoricalIncident(Incident):
     """A past incident with its resolution. Used for seed data."""
+
+    reported_at: datetime  # required: a missing date must not default to now
 
     root_cause: str = Field(min_length=3, max_length=MAX_TEXT_CHARS)
     resolution_steps: list[str] = Field(min_length=1, max_length=20)

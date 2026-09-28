@@ -25,3 +25,15 @@ def test_same_error_from_different_runs_normalizes_equal():
     a = "2026-06-03T14:08:11Z payment-api-6f7d8c9b5-abcde 10.0.1.5 too many clients"
     b = "2026-07-09T02:04:19Z payment-api-7a8b9c0d1-zyxwv 10.0.9.9 too many clients"
     assert normalize_log(a) == normalize_log(b)
+
+
+def test_python_logging_timestamp_with_comma_millis_normalizes_equal():
+    # Python's default logging format writes milliseconds after a comma: 2026-06-03 14:08:11,123
+    a = "2026-06-03 14:08:11,123 ERROR payment-api too many clients"
+    b = "2026-07-09 02:04:19,987 ERROR payment-api too many clients"
+    assert normalize_log(a) == normalize_log(b) == "<TIME> ERROR payment-api too many clients"
+
+
+def test_keeps_cloud_region_names():
+    log = "bucket in region us-east1 unreachable from europe-west1"
+    assert normalize_log(log) == log

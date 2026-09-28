@@ -47,5 +47,5 @@ def load_settings(bank_id_override: str | None = None) -> Settings:
         hindsight_api_key=_require("HINDSIGHT_API_KEY"),
         hindsight_bank_id=validate_bank_id(bank_id),
         groq_api_key=_require("GROQ_API_KEY"),
-        groq_model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+        groq_model=os.getenv("GROQ_MODEL", "").strip() or "openai/gpt-oss-120b",
     )
