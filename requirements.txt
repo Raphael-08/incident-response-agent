@@ -1,0 +1,8 @@
+hindsight-client
+groq
+fastapi
+uvicorn
+streamlit
+pydantic>=2
+python-dotenv
+pytest
