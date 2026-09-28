@@ -19,27 +19,48 @@ Help on-call engineers at ShopFast (a fictional e-commerce platform) resolve pro
 
 ## Architecture
 ```
-ShopFast mock app (FastAPI :8001)        Streamlit UI (:8501)
-fault switches -> real error logs  --->  submit / suggestions / record outcome
-                                                |
-                                       agent/service.py
-                                        |              |
-                               agent/memory.py     agent/llm.py
-                               Hindsight Cloud     Groq (openai/gpt-oss-120b)
-                               bank: shopfast-incidents
+                        ┌──────────────────────────────┐
+  ShopFast mock app     │  Streamlit UI  (:8501)       │   (proposed)
+  FastAPI 127.0.0.1:8001│  Submit │ Outcome │ Memory   │   REST API + Integrate tab
+  fault switches  ────► │  "What the agent has learned"│   for other projects
+  real error logs       └──────────────┬───────────────┘
+  (pasted into UI)                     │
+                           agent/service.py
+                   analyze_incident · record_outcome
+                      │                          │
+           agent/memory.py                 agent/llm.py
+           + log_normalizer.py             Groq openai/gpt-oss-120b
+                      │                    JSON output, retries
+           Hindsight Cloud
+           https://api.hindsight.vectorize.io
+           bank: shopfast-incidents[-demoN]
+           retain · recall(world) · recall(observation)
 ```
 
-| Module | Responsibility |
+| Module | Responsibility | Status |
+|---|---|---|
+| `agent/config.py` | Load settings from env; fail fast when missing; bank ID validation and override | Done |
+| `agent/models.py` | Pydantic models; all input validation; incident ID generation | Done |
+| `agent/log_normalizer.py` | Strip noise from logs before recall | Done, tested |
+| `agent/memory.py` | Hindsight `create_bank`, `retain`, `recall`, learned patterns | Interface only |
+| `agent/llm.py` | Groq call, JSON output, retries, `LLMError` | Interface only |
+| `agent/service.py` | `analyze_incident`, `record_outcome` | Interface only |
+| `shopfast/faults.py` | Fault switches and their log lines | Done |
+| `shopfast/app.py` | Mock shop endpoints; `/admin/faults` | Admin done, shop endpoints stubbed |
+| `ui/app.py` | Streamlit UI, 3 tabs | Placeholder |
+| `scripts/seed_memory.py` | Validate seed data, `--bank-id`, load into Hindsight | Validation done, retain TODO |
+| `data/seed_incidents.json` | 25 synthetic incidents | Done |
+
+## Configuration
+`.env` (git-ignored) holds:
+
+| Variable | Value |
 |---|---|
-| `agent/config.py` | Load settings from env; fail fast when missing |
-| `agent/models.py` | Pydantic models; all input validation; incident ID generation |
-| `agent/log_normalizer.py` | Strip noise from logs before recall |
-| `agent/memory.py` | Hindsight `create_bank`, `retain`, `recall` |
-| `agent/llm.py` | Groq call, JSON output, retries, `LLMError` |
-| `agent/service.py` | `analyze_incident`, `record_outcome` |
-| `shopfast/` | Mock shop with fault switches |
-| `ui/app.py` | Streamlit UI |
-| `scripts/seed_memory.py` | Validate and load seed data into Hindsight |
+| `HINDSIGHT_BASE_URL` | `https://api.hindsight.vectorize.io` |
+| `HINDSIGHT_API_KEY` | from Hindsight Cloud Connect page |
+| `HINDSIGHT_BANK_ID` | `shopfast-incidents` (or a demo bank) |
+| `GROQ_API_KEY` | from console.groq.com |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` |
 
 ## Hindsight memory usage
 - One shared bank: `shopfast-incidents` (overridable per demo run, see below).
@@ -97,6 +118,31 @@ Then set `HINDSIGHT_BANK_ID=shopfast-incidents-demo3` in `.env`. Old banks stay 
 | Agent owner | `agent/llm.py`, `agent/service.py`, prompt, Groq error handling |
 | ShopFast owner | `shopfast/app.py` endpoints and fault behavior |
 | UI + demo owner | `ui/app.py` (incl. "What the agent has learned" panel), demo script, video, content deliverables |
+
+## Proposed: embedding the agent in other projects (pending decision)
+| Option | Who can use it | Effort |
+|---|---|---|
+| REST API (FastAPI): `POST /incidents/analyze`, `POST /incidents/{id}/outcome`, `GET /patterns` | Any project, any language | about 1-1.5 h |
+| Python package (`pip install git+<repo>`) | Python projects | almost none |
+| Streamlit iframe (`?embed=true`) | Web apps, UI only | small |
+| MCP server (`analyze_incident`, `record_outcome` tools) | Other AI agents | about 1 h on top of the REST API |
+
+UI addition: an "Integrate" tab showing the API endpoint, a `curl` example, the iframe snippet, and how to request an API key.
+
+Security for embedding: API key per client (stored hashed), one memory bank per client so no client can read another's incidents, CORS allow-list, rate limits, fault admin stays local-only.
+
+## Progress log
+| Date | Commit | Change |
+|---|---|---|
+| 2026-09-28 | `5d183c5` | Project skeleton: structure, models, stubs, seed data, tests, docs |
+| 2026-09-28 | `3c83ec9` | Log normalizer, automatic incident IDs, learned patterns interface, demo bank reset |
+| 2026-09-28 | (this change) | Design doc: final architecture, module status, configuration, embedding proposal, open items |
+
+## Open items
+- Tests: model tests not yet run; `pip install` fails with an SSL certificate error on the dev machine. Normalizer tests pass (4/4).
+- GitHub remote: repo URL pending; push after it is shared.
+- Decision: embedding options and the Integrate tab.
+- Build order: `agent/memory.py` and seed script, then `llm.py` and `service.py`, then UI, then ShopFast endpoints.
 
 ## Future work
 - Agent learns whether its own suggestions worked (retain suggestion plus result).
