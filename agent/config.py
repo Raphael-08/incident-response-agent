@@ -1,9 +1,12 @@
 """Loads configuration from environment variables. Fails fast when a required value is missing."""
 
 import os
+import re
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
+
+_BANK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,63}$")
 
 
 class ConfigError(RuntimeError):
@@ -26,13 +29,23 @@ def _require(name: str) -> str:
     return value
 
 
-def load_settings() -> Settings:
-    """Read settings from the environment (and a local .env file, if present)."""
+def validate_bank_id(bank_id: str) -> str:
+    if not _BANK_ID_RE.fullmatch(bank_id):
+        raise ConfigError(f"Invalid bank ID {bank_id!r}: use 3-64 lowercase letters, digits or hyphens")
+    return bank_id
+
+
+def load_settings(bank_id_override: str | None = None) -> Settings:
+    """Read settings from the environment (and a local .env file, if present).
+
+    bank_id_override lets scripts target a fresh demo bank, e.g. shopfast-incidents-demo3.
+    """
     load_dotenv()
+    bank_id = bank_id_override or os.getenv("HINDSIGHT_BANK_ID", "shopfast-incidents")
     return Settings(
         hindsight_base_url=_require("HINDSIGHT_BASE_URL"),
         hindsight_api_key=_require("HINDSIGHT_API_KEY"),
-        hindsight_bank_id=os.getenv("HINDSIGHT_BANK_ID", "shopfast-incidents"),
+        hindsight_bank_id=validate_bank_id(bank_id),
         groq_api_key=_require("GROQ_API_KEY"),
         groq_model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
     )

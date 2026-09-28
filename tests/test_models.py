@@ -1,7 +1,9 @@
+import re
+
 import pytest
 from pydantic import ValidationError
 
-from agent.models import Incident, MAX_LOG_CHARS
+from agent.models import INCIDENT_ID_PATTERN, Incident, MAX_LOG_CHARS
 from scripts.seed_memory import load_seed_incidents
 from shopfast.faults import Fault, FaultRegistry
 
@@ -21,6 +23,13 @@ def _incident(**overrides) -> dict:
 
 def test_valid_incident_parses():
     assert Incident.model_validate(_incident()).service == "payment-api"
+
+
+def test_incident_id_generated_when_missing():
+    data = _incident()
+    del data["incident_id"]
+    incident = Incident.model_validate(data)
+    assert re.fullmatch(INCIDENT_ID_PATTERN, incident.incident_id)
 
 
 @pytest.mark.parametrize(

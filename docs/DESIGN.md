@@ -32,7 +32,8 @@ fault switches -> real error logs  --->  submit / suggestions / record outcome
 | Module | Responsibility |
 |---|---|
 | `agent/config.py` | Load settings from env; fail fast when missing |
-| `agent/models.py` | Pydantic models; all input validation |
+| `agent/models.py` | Pydantic models; all input validation; incident ID generation |
+| `agent/log_normalizer.py` | Strip noise from logs before recall |
 | `agent/memory.py` | Hindsight `create_bank`, `retain`, `recall` |
 | `agent/llm.py` | Groq call, JSON output, retries, `LLMError` |
 | `agent/service.py` | `analyze_incident`, `record_outcome` |
@@ -41,10 +42,22 @@ fault switches -> real error logs  --->  submit / suggestions / record outcome
 | `scripts/seed_memory.py` | Validate and load seed data into Hindsight |
 
 ## Hindsight memory usage
-- One shared bank: `shopfast-incidents`.
+- One shared bank: `shopfast-incidents` (overridable per demo run, see below).
 - Seeding: one `retain` per past incident, `document_id = incident_id`, metadata `service`, `severity`, `resolved`. Content text includes the incident ID so recalled facts can be cited.
-- Analyze: `recall(query=<title + symptoms + error_log>, include_chunks=True)`. Chunks provide source text for citations.
+- Analyze, similar incidents: `recall(query, types=["world"], include_chunks=True)`. Chunks provide source text for citations.
+- Analyze, learned patterns: `recall(query, types=["observation"])`. Observations are patterns Hindsight consolidates across many incidents (for example "restarting pods never fixes pool exhaustion"). Shown in the UI as "What the agent has learned", so learning is visible, not only search.
+- Recall query: `service + title + symptoms + normalize_log(error_log)`. `agent/log_normalizer.py` replaces timestamps, IPs, UUIDs, pod hashes, hex values and long numbers with placeholders, so the same error from different runs produces the same query.
 - Learn: `record_outcome` calls `retain` with the new incident and its outcome, including failed attempts.
+
+## Incident IDs
+Generated automatically when not supplied: `INC-` + UTC timestamp `yymmddHHMMSS` + 2 random digits (for example `INC-26092814301207`). Seed incidents keep short IDs (`INC-1042`). Pattern: `^INC-\d{4,16}$`.
+
+## Demo reset
+The Hindsight SDK does not document a bank delete call, and deleting memory is irreversible. Instead, each demo run uses a fresh bank:
+```
+python -m scripts.seed_memory --bank-id shopfast-incidents-demo3
+```
+Then set `HINDSIGHT_BANK_ID=shopfast-incidents-demo3` in `.env`. Old banks stay untouched. Bank IDs must match `^[a-z0-9][a-z0-9-]{2,63}$`.
 
 ## Seed data
 25 synthetic incidents in `data/seed_incidents.json`:
@@ -80,7 +93,15 @@ fault switches -> real error logs  --->  submit / suggestions / record outcome
 ## Task split (4 people)
 | Owner | Tasks |
 |---|---|
-| Memory owner | `agent/memory.py`, `scripts/seed_memory.py`, Hindsight Cloud bank setup |
+| Memory owner | `agent/memory.py` (incl. `recall_learned_patterns`), `scripts/seed_memory.py`, Hindsight Cloud bank setup |
 | Agent owner | `agent/llm.py`, `agent/service.py`, prompt, Groq error handling |
 | ShopFast owner | `shopfast/app.py` endpoints and fault behavior |
-| UI + demo owner | `ui/app.py`, demo script, video, content deliverables |
+| UI + demo owner | `ui/app.py` (incl. "What the agent has learned" panel), demo script, video, content deliverables |
+
+## Future work
+- Agent learns whether its own suggestions worked (retain suggestion plus result).
+- ShopFast sends alerts to the agent automatically instead of copy-paste.
+- Persist open incidents (SQLite) so a page refresh does not lose them.
+- Fake memory and advisor classes for offline service tests.
+- Eval script: recall hit rate before and after the feedback loop.
+- Treat error logs as untrusted input in the LLM prompt (delimiters, data-only instruction).

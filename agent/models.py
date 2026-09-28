@@ -1,5 +1,6 @@
 """Data models for incidents, outcomes and agent suggestions. All user input is validated here."""
 
+import secrets
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -7,6 +8,13 @@ from pydantic import BaseModel, Field, field_validator
 
 MAX_LOG_CHARS = 8000
 MAX_TEXT_CHARS = 2000
+INCIDENT_ID_PATTERN = r"^INC-\d{4,16}$"
+
+
+def new_incident_id() -> str:
+    """Generate an ID like INC-26092814301207: UTC timestamp plus 2 random digits."""
+    stamp = datetime.now(timezone.utc).strftime("%y%m%d%H%M%S")
+    return f"INC-{stamp}{secrets.randbelow(100):02d}"
 
 
 class Severity(str, Enum):
@@ -16,9 +24,9 @@ class Severity(str, Enum):
 
 
 class Incident(BaseModel):
-    """A new incident submitted by an engineer."""
+    """A new incident submitted by an engineer. The ID is generated when not supplied."""
 
-    incident_id: str = Field(pattern=r"^INC-\d{4,6}$")
+    incident_id: str = Field(default_factory=new_incident_id, pattern=INCIDENT_ID_PATTERN)
     service: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9-]+$")
     severity: Severity
     title: str = Field(min_length=3, max_length=200)
@@ -35,7 +43,7 @@ class Incident(BaseModel):
 class Outcome(BaseModel):
     """What actually happened after the engineer worked on the incident."""
 
-    incident_id: str = Field(pattern=r"^INC-\d{4,6}$")
+    incident_id: str = Field(pattern=INCIDENT_ID_PATTERN)
     resolved: bool
     actual_root_cause: str = Field(min_length=3, max_length=MAX_TEXT_CHARS)
     steps_that_worked: list[str] = Field(default_factory=list, max_length=20)
@@ -60,10 +68,17 @@ class SimilarIncident(BaseModel):
     source_text: str = ""
 
 
+class LearnedPattern(BaseModel):
+    """An observation Hindsight consolidated from many incidents, e.g. 'restarting pods never fixes pool exhaustion'."""
+
+    text: str
+
+
 class Suggestion(BaseModel):
     """The agent's answer for a new incident."""
 
     similar_incidents: list[SimilarIncident] = Field(default_factory=list)
+    learned_patterns: list[LearnedPattern] = Field(default_factory=list)
     probable_root_cause: str
     fix_steps: list[str] = Field(default_factory=list)
     avoid_steps: list[str] = Field(default_factory=list)
