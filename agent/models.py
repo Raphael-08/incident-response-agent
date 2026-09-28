@@ -3,12 +3,17 @@
 import secrets
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 MAX_LOG_CHARS = 8000
 MAX_TEXT_CHARS = 2000
 INCIDENT_ID_PATTERN = r"^INC-\d{4,16}$"
+SERVICE_PATTERN = r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+
+# One step or attempt in a list: not blank, bounded length.
+Step = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_TEXT_CHARS)]
 
 
 def new_incident_id() -> str:
@@ -30,7 +35,7 @@ class Incident(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     incident_id: str = Field(default_factory=new_incident_id, pattern=INCIDENT_ID_PATTERN)
-    service: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9-]+$")
+    service: str = Field(min_length=1, max_length=64, pattern=SERVICE_PATTERN)
     severity: Severity
     title: str = Field(min_length=3, max_length=200)
     symptoms: str = Field(min_length=3, max_length=MAX_TEXT_CHARS)
@@ -46,8 +51,8 @@ class Outcome(BaseModel):
     incident_id: str = Field(pattern=INCIDENT_ID_PATTERN)
     resolved: bool
     actual_root_cause: str = Field(min_length=3, max_length=MAX_TEXT_CHARS)
-    steps_that_worked: list[str] = Field(default_factory=list, max_length=20)
-    failed_attempts: list[str] = Field(default_factory=list, max_length=20)
+    steps_that_worked: list[Step] = Field(default_factory=list, max_length=20)
+    failed_attempts: list[Step] = Field(default_factory=list, max_length=20)
     notes: str = Field(default="", max_length=MAX_TEXT_CHARS)
 
 
@@ -57,8 +62,8 @@ class HistoricalIncident(Incident):
     reported_at: datetime  # required: a missing date must not default to now
 
     root_cause: str = Field(min_length=3, max_length=MAX_TEXT_CHARS)
-    resolution_steps: list[str] = Field(min_length=1, max_length=20)
-    failed_attempts: list[str] = Field(default_factory=list, max_length=20)
+    resolution_steps: list[Step] = Field(min_length=1, max_length=20)
+    failed_attempts: list[Step] = Field(default_factory=list, max_length=20)
     lesson: str = Field(default="", max_length=MAX_TEXT_CHARS)
 
 
@@ -82,7 +87,7 @@ class Suggestion(BaseModel):
     similar_incidents: list[SimilarIncident] = Field(default_factory=list)
     learned_patterns: list[LearnedPattern] = Field(default_factory=list)
     probable_root_cause: str
-    fix_steps: list[str] = Field(default_factory=list)
-    avoid_steps: list[str] = Field(default_factory=list)
+    fix_steps: list[Step] = Field(default_factory=list)
+    avoid_steps: list[Step] = Field(default_factory=list)
     confidence: str = Field(pattern=r"^(low|medium|high)$")
     memory_used: bool

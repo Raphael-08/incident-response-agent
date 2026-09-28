@@ -3,9 +3,18 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from agent.models import INCIDENT_ID_PATTERN, HistoricalIncident, Incident, MAX_LOG_CHARS, Outcome
+from agent.log_normalizer import normalize_log
+from agent.models import (
+    INCIDENT_ID_PATTERN,
+    MAX_LOG_CHARS,
+    MAX_TEXT_CHARS,
+    HistoricalIncident,
+    Incident,
+    Outcome,
+    Suggestion,
+)
 from scripts.seed_memory import load_seed_incidents
-from shopfast.faults import Fault, FaultRegistry
+from shopfast.faults import FAULT_LOGS, Fault, FaultRegistry
 
 
 def _incident(**overrides) -> dict:
@@ -77,3 +86,72 @@ def test_historical_incident_requires_reported_at():
     record = load_seed_incidents()[0].model_dump(exclude={"reported_at"})
     with pytest.raises(ValidationError):
         HistoricalIncident.model_validate(record)
+
+
+def _outcome(**overrides) -> dict:
+    data = {"incident_id": "INC-2001", "resolved": True, "actual_root_cause": "Pool too small"}
+    data.update(overrides)
+    return data
+
+
+@pytest.mark.parametrize("field", ["steps_that_worked", "failed_attempts"])
+@pytest.mark.parametrize("item", ["", "   ", "x" * (MAX_TEXT_CHARS + 1)], ids=["empty", "blank", "too-long"])
+def test_outcome_bad_list_item_rejected(field, item):
+    with pytest.raises(ValidationError):
+        Outcome.model_validate(_outcome(**{field: ["Rolled back", item]}))
+
+
+@pytest.mark.parametrize("item", ["   ", "x" * (MAX_TEXT_CHARS + 1)], ids=["blank", "too-long"])
+def test_historical_bad_resolution_step_rejected(item):
+    record = load_seed_incidents()[0].model_dump()
+    record["resolution_steps"] = [item]
+    with pytest.raises(ValidationError):
+        HistoricalIncident.model_validate(record)
+
+
+@pytest.mark.parametrize("service", ["-", "---", "-payment", "payment-"])
+def test_service_must_start_and_end_with_letter_or_digit(service):
+    with pytest.raises(ValidationError):
+        Incident.model_validate(_incident(service=service))
+
+
+def test_text_is_stripped():
+    incident = Incident.model_validate(_incident(title="  Checkout failing  ", error_log="  boom \n"))
+    assert incident.title == "Checkout failing"
+    assert incident.error_log == "boom"
+
+
+def test_generated_ids_are_valid_and_distinct():
+    ids = {Incident.model_validate({k: v for k, v in _incident().items() if k != "incident_id"}).incident_id
+           for _ in range(20)}
+    assert all(re.fullmatch(INCIDENT_ID_PATTERN, i) for i in ids)
+    assert len(ids) > 1
+
+
+@pytest.mark.parametrize("confidence", ["low", "medium", "high"])
+def test_suggestion_accepts_confidence(confidence):
+    Suggestion(probable_root_cause="x", confidence=confidence, memory_used=True)
+
+
+def test_suggestion_rejects_unknown_confidence():
+    with pytest.raises(ValidationError):
+        Suggestion(probable_root_cause="x", confidence="certain", memory_used=True)
+
+
+def test_seed_has_patterns_described_in_design():
+    ids = {i.incident_id for i in load_seed_incidents()}
+    for pattern in (
+        {"INC-1042", "INC-1067", "INC-1113"},  # DB connection pool exhaustion
+        {"INC-1051", "INC-1088", "INC-1129"},  # Redis timeout
+        {"INC-1075", "INC-1098", "INC-1141"},  # Auth token expiry
+    ):
+        assert pattern <= ids
+
+
+def test_seed_logs_have_no_timestamps_left_after_normalizing():
+    for incident in load_seed_incidents():
+        assert not re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", normalize_log(incident.error_log)), incident.incident_id
+
+
+def test_every_fault_has_a_log_line():
+    assert set(FAULT_LOGS) == set(Fault)
