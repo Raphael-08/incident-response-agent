@@ -40,7 +40,7 @@ ui/         Streamlit UI
 data/       synthetic seed incidents, evaluation and learning-curve results
 scripts/    seed, before/after evaluation, learning curve
 tests/      unit tests
-docs/       design document, demo script, content drafts
+docs/       design document, demo script, project overview, pending work, content templates
 ```
 
 ## Setup
