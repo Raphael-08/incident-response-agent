@@ -1,5 +1,6 @@
 # Secrets
 .env
+data/incidents.db
 
 # Python
 __pycache__/
