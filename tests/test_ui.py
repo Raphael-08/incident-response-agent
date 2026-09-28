@@ -8,7 +8,7 @@ from streamlit.testing.v1 import AppTest
 
 from agent import config
 from agent.memory import IncidentMemoryError
-from agent.models import LearnedPattern, SimilarIncident, Suggestion
+from agent.models import LearnedPattern, RemediationAttempt, SimilarIncident, Suggestion
 from shopfast.faults import FAULT_LOGS, Fault
 
 APP = str(Path(__file__).resolve().parent.parent / "ui" / "app.py")
@@ -28,16 +28,27 @@ def _suggestion(**overrides) -> Suggestion:
 
 
 class FakeService:
-    def __init__(self, suggestion=None, error=None):
-        self.analyzed, self.recorded = [], []
+    def __init__(self, suggestion=None, error=None, next_suggestion=None, verified=True):
+        self.analyzed, self.recorded, self.tried, self.remediated = [], [], [], []
         self._suggestion = suggestion or _suggestion()
+        self._next = next_suggestion
         self._error = error
+        self._verified = verified
 
-    def analyze_incident(self, incident):
+    def analyze_incident(self, incident, tried_actions=()):
         self.analyzed.append(incident)
+        self.tried.append(list(tried_actions))
         if self._error:
             raise self._error
-        return self._suggestion
+        return self._next if tried_actions and self._next else self._suggestion
+
+    def remediate(self, incident, suggestion, approved, previous_attempts=()):
+        self.remediated.append((incident, suggestion.proposed_action, approved, list(previous_attempts)))
+        verified = approved and self._verified
+        return RemediationAttempt(
+            action=suggestion.proposed_action, description=f"desc of {suggestion.proposed_action}",
+            reason=suggestion.action_reason, approved=approved, executed=approved, verified=verified,
+            health={"POST /checkout": 200 if verified else 503} if approved else {})
 
     def record_outcome(self, incident, outcome):
         self.recorded.append((incident, outcome))
@@ -187,3 +198,57 @@ def test_missing_configuration_is_shown_not_crashed(monkeypatch):
 def test_source_never_allows_unsafe_html():
     assert "unsafe_allow_html" not in Path(APP).read_text(encoding="utf-8").replace(
         "Render all user text with st.text / st.code / st.markdown without unsafe_allow_html.", "")
+
+
+# act -> verify -> learn
+
+def _with_action(action="rollback_payment_api", **overrides):
+    return _suggestion(proposed_action=action, action_reason=f"{action} fixed INC-1042", **overrides)
+
+
+def test_proposed_action_is_shown_with_reason_and_approval_buttons():
+    at = _submit(_app(FakeService(_with_action())))
+    text = _all_text(at)
+    assert "rollback_payment_api" in text and "rollback_payment_api fixed INC-1042" in text
+    assert at.button(key="approve_action") and at.button(key="reject_action")
+
+
+def test_no_action_means_no_approval_buttons():
+    at = _submit(_app(FakeService()))
+    assert not [b for b in at.button if b.key in ("approve_action", "reject_action")]
+
+
+def test_approve_runs_action_and_shows_verified_auto_recorded_result():
+    service = FakeService(_with_action())
+    at = _submit(_app(service))
+    at = at.button(key="approve_action").click().run()
+    assert not at.exception
+    [(incident, action, approved, previous)] = service.remediated
+    assert (action, approved, previous) == ("rollback_payment_api", True, [])
+    assert any("recorded in memory automatically" in s.value.lower() for s in at.success)
+    text = _all_text(at)
+    assert "approved" in text.lower() and "POST /checkout 200" in text
+    assert not [b for b in at.button if b.key == "approve_action"]  # resolved: nothing left to approve
+
+
+def test_reject_records_decision_without_running_and_offers_next_action():
+    service = FakeService(_with_action(), next_suggestion=_with_action("disable_cart_analytics"))
+    at = _submit(_app(service))
+    at = at.button(key="reject_action").click().run()
+    assert service.remediated[0][2] is False
+    assert "rejected" in _all_text(at).lower()
+    at = at.button(key="next_action").click().run()
+    assert service.tried[-1] == ["rollback_payment_api"]
+    assert "disable_cart_analytics" in _all_text(at)
+
+
+def test_failed_verification_shows_error_and_next_action_excludes_tried():
+    service = FakeService(_with_action("restart_payment_api_pods"), verified=False,
+                          next_suggestion=_with_action("rollback_payment_api"))
+    at = _submit(_app(service))
+    at = at.button(key="approve_action").click().run()
+    assert any("still failing" in e.value.lower() for e in at.error)
+    at = at.button(key="next_action").click().run()
+    assert service.tried[-1] == ["restart_payment_api_pods"]
+    at = at.button(key="approve_action").click().run()
+    assert len(service.remediated[-1][3]) == 1  # earlier failed attempt passed along for the recorded outcome

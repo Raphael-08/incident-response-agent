@@ -1,6 +1,6 @@
 """ShopFast mock API. Run: uvicorn shopfast.app:app --host 127.0.0.1 --port 8001
 
-Bind to 127.0.0.1 only: /admin/faults has no auth and must stay local.
+Bind to 127.0.0.1 only: /admin/faults and /ops/actions have no auth and must stay local.
 
 When a fault is on, the affected endpoint fails with its real-looking log line. The line is written to the
 server log and returned in the response body as "log", ready to paste into the agent UI.
@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from shopfast.faults import FAULT_LOGS, Fault, FaultRegistry
+from shopfast.remediations import ACTIONS
 
 logger = logging.getLogger("shopfast")
 
@@ -101,6 +102,22 @@ def checkout(order: CheckoutRequest) -> dict:
     total = sum(product(item.product_id)["price"] * item.quantity for item in order.items)
     fail_if_active(Fault.DB_POOL_EXHAUST, Fault.PAYMENT_GATEWAY_TIMEOUT)  # DB is reached before the gateway
     return {"order_id": f"ORD-{secrets.randbelow(10**8):08d}", "total": round(total, 2)}
+
+
+@app.get("/ops/actions")
+def list_actions() -> list[dict]:
+    """Runbook actions the agent may propose. Which fault each one fixes is deliberately not exposed."""
+    return [{"name": name, "description": action.description} for name, action in ACTIONS.items()]
+
+
+@app.post("/ops/actions/{name}")
+def run_action(name: str) -> dict:
+    if name not in ACTIONS:
+        raise HTTPException(status_code=404, detail=f"Unknown action {name}")
+    for fault in ACTIONS[name].fixes:
+        faults.disable(fault)
+    logger.info("ops action %s executed", name)
+    return {"action": name, "executed": True}
 
 
 @app.get("/admin/faults")

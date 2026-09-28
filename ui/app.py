@@ -13,10 +13,11 @@ from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # streamlit puts ui/ on the path, not the repo root
 
+from agent.actions import ShopFastClient  # noqa: E402
 from agent.config import ConfigError, load_settings  # noqa: E402
 from agent.llm import IncidentAdvisor  # noqa: E402
 from agent.memory import IncidentMemory, IncidentMemoryError  # noqa: E402
-from agent.models import Incident, Outcome, Severity, Suggestion  # noqa: E402
+from agent.models import Incident, Outcome, RemediationAttempt, Severity, Suggestion  # noqa: E402
 from agent.service import IncidentService  # noqa: E402
 from shopfast.faults import FAULT_LOGS, Fault  # noqa: E402
 
@@ -24,7 +25,7 @@ from shopfast.faults import FAULT_LOGS, Fault  # noqa: E402
 @st.cache_resource
 def build_service() -> IncidentService:
     settings = load_settings()
-    return IncidentService(IncidentMemory(settings), IncidentAdvisor(settings))
+    return IncidentService(IncidentMemory(settings), IncidentAdvisor(settings), ShopFastClient.from_settings(settings))
 
 
 def get_service() -> IncidentService:
@@ -81,6 +82,62 @@ def show_suggestion(incident: Incident, suggestion: Suggestion) -> None:
                     st.code(item.source_text, language=None)
 
 
+def show_attempt(attempt: RemediationAttempt) -> None:
+    decision = "approved" if attempt.approved else "rejected"
+    if not attempt.approved:
+        result = "not run"
+    elif not attempt.executed:
+        result = "could not run"
+    else:
+        result = "verified healthy" if attempt.verified else "still failing"
+    health = ", ".join(f"{endpoint} {status}" for endpoint, status in attempt.health.items())
+    st.text(f"{attempt.at:%H:%M:%S}  {attempt.action}  |  {decision}  |  {result}" + (f"  |  {health}" if health else ""))
+    st.caption(f"Why: {attempt.reason}" if attempt.reason else attempt.description)
+    if attempt.error:
+        st.warning(attempt.error)
+
+
+def action_panel(service: IncidentService, incident_id: str) -> None:
+    """Approval gate and audit log: the agent acts only on an explicit human decision."""
+    incident, suggestion = st.session_state["incidents"][incident_id]
+    attempts: list[RemediationAttempt] = st.session_state.setdefault("attempts", {}).setdefault(incident_id, [])
+    resolved = any(a.verified for a in attempts)
+    decided = {a.action for a in attempts}
+
+    if suggestion.proposed_action and not resolved and suggestion.proposed_action not in decided:
+        st.subheader("Proposed action")
+        st.text(suggestion.proposed_action)
+        if suggestion.action_reason:
+            st.text(f"Why: {suggestion.action_reason}")
+        st.caption("The agent runs this allow-listed ShopFast action only if you approve it, then verifies checkout.")
+        approve, reject = st.columns(2)
+        decision = None
+        if approve.button("Approve and run", key="approve_action", type="primary"):
+            decision = True
+        if reject.button("Reject", key="reject_action"):
+            decision = False
+        if decision is not None:
+            with st.spinner("Running action and verifying ShopFast..."):
+                attempt = service.remediate(incident, suggestion, approved=decision, previous_attempts=list(attempts))
+            attempts.append(attempt)
+            st.rerun()  # redraw from the new state, so the decided action's buttons disappear
+
+    if attempts:
+        st.subheader("Action log")
+        for attempt in attempts:
+            show_attempt(attempt)
+        last = attempts[-1]
+        if last.verified:
+            st.success("Checkout is healthy again. The outcome was recorded in memory automatically.")
+        elif last.executed:
+            st.error("The action ran but checkout is still failing. The failed attempt was recorded in memory.")
+        if not resolved and st.button("Ask the agent for the next action", key="next_action"):
+            with st.spinner("Re-analyzing without the actions already tried..."):
+                suggestion = service.analyze_incident(incident, tried_actions=[a.action for a in attempts])
+            st.session_state["incidents"][incident_id] = (incident, suggestion)
+            st.rerun()
+
+
 def submit_tab(service: IncidentService) -> None:
     left, right = st.columns([3, 1])
     left.selectbox("Example error log (ShopFast fault)", [f.value for f in Fault], key="example_fault")
@@ -118,6 +175,7 @@ def submit_tab(service: IncidentService) -> None:
     last_id = st.session_state.get("last_id")
     if last_id:
         show_suggestion(*st.session_state["incidents"][last_id])
+        action_panel(service, last_id)
 
 
 def outcome_tab(service: IncidentService) -> None:

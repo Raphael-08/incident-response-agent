@@ -266,3 +266,59 @@ def test_rate_limit_wait_is_capped():
     advisor = IncidentAdvisor(Settings("u", "k", "shopfast-incidents", "k", MODEL), client=client, sleep=waits.append)
     advisor.suggest(_incident(), SIMILAR, [])
     assert waits == [llm.MAX_WAIT_SECONDS]
+
+
+# remediation actions
+
+from agent.models import RemediationAction  # noqa: E402
+
+ACTIONS = [
+    RemediationAction(name="rollback_payment_api", description="Roll payment-api back to its previous release"),
+    RemediationAction(name="restart_payment_api_pods", description="Restart all payment-api pods"),
+]
+
+
+def test_prompt_lists_actions_as_data_and_asks_for_one():
+    client = FakeGroq(_answer(proposed_action="rollback_payment_api", action_reason="Worked in INC-1042"))
+    _advisor(client).suggest(_incident(), SIMILAR, [], actions=ACTIONS)
+    system, user = (m["content"] for m in client.calls[0]["messages"])
+    assert "proposed_action" in system
+    assert "<actions>" in user and "rollback_payment_api" in user and "Restart all payment-api pods" in user
+
+
+def test_valid_proposed_action_is_returned_with_reason():
+    answer = _answer(proposed_action="rollback_payment_api", action_reason="Rollback fixed INC-1042")
+    suggestion = _advisor(FakeGroq(answer)).suggest(_incident(), SIMILAR, [], actions=ACTIONS)
+    assert suggestion.proposed_action == "rollback_payment_api"
+    assert suggestion.action_reason == "Rollback fixed INC-1042"
+
+
+@pytest.mark.parametrize("bad", [
+    _answer(proposed_action="drop_database", action_reason="x"),
+    _answer(proposed_action="restart_payment_api_pods", action_reason="x"),
+    _answer(proposed_action="rollback_payment_api", action_reason="Worked in INC-9999"),
+], ids=["not-allow-listed", "already-tried", "reason-cites-unknown-incident"])
+def test_invalid_proposed_action_is_retried(bad):
+    good = _answer(proposed_action="rollback_payment_api", action_reason="Worked in INC-1042")
+    client = FakeGroq(bad, good)
+    suggestion = _advisor(client).suggest(_incident(), SIMILAR, [], actions=ACTIONS,
+                                          tried_actions=["restart_payment_api_pods"])
+    assert suggestion.proposed_action == "rollback_payment_api"
+    assert len(client.calls) == 2
+
+
+def test_tried_actions_are_shown_to_the_llm():
+    client = FakeGroq(_answer(proposed_action="rollback_payment_api", action_reason="r"))
+    _advisor(client).suggest(_incident(), SIMILAR, [], actions=ACTIONS, tried_actions=["restart_payment_api_pods"])
+    user = client.calls[0]["messages"][1]["content"]
+    assert "already tried" in user.lower() and "restart_payment_api_pods" in user
+
+
+def test_no_action_offered_means_no_action_proposed():
+    answer = _answer(proposed_action="rollback_payment_api", action_reason="r")
+    assert _advisor(FakeGroq(answer)).suggest(_incident(), SIMILAR, []).proposed_action is None
+
+
+def test_llm_may_propose_no_action():
+    suggestion = _advisor(FakeGroq(_answer(proposed_action=None))).suggest(_incident(), SIMILAR, [], actions=ACTIONS)
+    assert suggestion.proposed_action is None

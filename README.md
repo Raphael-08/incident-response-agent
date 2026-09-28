@@ -4,8 +4,9 @@ An AI agent that remembers every past production incident at ShopFast (a fiction
 
 When production breaks, the agent:
 1. Recalls similar past incidents from Hindsight memory and cites them.
-2. Suggests a probable root cause, ordered fix steps, and fixes that failed before.
-3. Learns from each outcome the engineer records, so the next similar incident gets a better answer.
+2. Suggests a probable root cause, ordered fix steps, fixes that failed before, and one allow-listed remediation action.
+3. Runs the action only after a human approves it, then verifies the shop is healthy.
+4. Records the outcome in memory automatically, so the next similar incident gets the proven fix.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for architecture, data model, and task split.
 
@@ -50,4 +51,4 @@ pytest                                                     # tests
 ```
 
 ## Status
-All modules are built and tested (168 tests passing): config, models, log normalizer, Hindsight memory, seed script, Groq advisor, service, Streamlit UI and the ShopFast mock shop. The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.
+All modules are built and tested (213 tests passing): config, models, log normalizer, Hindsight memory, seed script, Groq advisor, service, Streamlit UI and the ShopFast mock shop. The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.

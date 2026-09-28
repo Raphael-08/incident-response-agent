@@ -81,6 +81,27 @@ class LearnedPattern(BaseModel):
     text: str
 
 
+class RemediationAction(BaseModel):
+    """An allow-listed runbook action the agent may propose. Names come from ShopFast's /ops/actions."""
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]{2,63}$")
+    description: str = Field(min_length=3, max_length=MAX_TEXT_CHARS)
+
+
+class RemediationAttempt(BaseModel):
+    """Audit record of one proposed action: what, why, whether a human approved it, and what verification saw."""
+
+    action: str
+    description: str
+    reason: str = ""
+    approved: bool
+    executed: bool
+    verified: bool
+    health: dict[str, int] = Field(default_factory=dict)  # e.g. {"POST /checkout": 200}
+    error: str | None = None
+    at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Suggestion(BaseModel):
     """The agent's answer for a new incident."""
 
@@ -92,3 +113,5 @@ class Suggestion(BaseModel):
     confidence: str = Field(pattern=r"^(low|medium|high)$")
     memory_used: bool
     llm_error: str | None = None  # set when the LLM failed; recalled memory is still returned
+    proposed_action: str | None = None  # allow-listed runbook action; runs only after human approval
+    action_reason: str = ""

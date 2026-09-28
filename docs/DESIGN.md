@@ -66,9 +66,21 @@ Scenario summary:
 | `agent/service.py` | `analyze_incident`, `record_outcome`; returns memory when LLM fails | Done, tested with fakes |
 | `shopfast/faults.py` | Fault switches and their log lines | Done |
 | `shopfast/app.py` | Mock shop endpoints; `/admin/faults`; faults return and log a timestamped error line | Done, tested |
+| `agent/actions.py` | ShopFast tool client: list and run allow-listed actions, health checks | Done, tested |
+| `shopfast/remediations.py` | Simulated runbook actions, including decoys | Done, tested |
 | `ui/app.py` | Streamlit UI, 3 tabs, example fault logs, text-only rendering of incident and LLM text | Done, tested with AppTest |
 | `scripts/seed_memory.py` | Validate seed data, `--bank-id`, load into Hindsight | Done, tested |
 | `data/seed_incidents.json` | 25 synthetic incidents | Done |
+
+## Act -> verify -> learn
+The agent can act, but only through an allow-listed, human-approved runbook.
+1. `analyze_incident` offers ShopFast's runbook actions (`GET /ops/actions`: name and description only) to the LLM, which proposes one with a reason. The proposal is validated: it must be listed and not already tried, and its reason may cite only relevant incidents.
+2. The UI shows the proposed action and why. Nothing runs until a human clicks Approve (or Reject).
+3. `remediate` runs the approved action (`POST /ops/actions/{name}`), then probes `/products`, `/login`, `/cart/items` and `/checkout`.
+4. The agent builds the outcome itself (worked steps, failed attempts with the failing endpoint, health) and retains it with the existing `retain_outcome`. Failed attempts are recorded too; "Ask the agent for the next action" re-analyzes without the actions already tried.
+5. The next similar incident recalls that outcome.
+
+Safety: actions are simulated in ShopFast (`shopfast/remediations.py`), some are decoys that fix nothing, and the agent never sees which fault an action fixes. The agent's client (`agent/actions.py`) cannot reach `/admin/faults`. Every decision is kept in an action log (action, reason, approved or rejected, verification result).
 
 ## Configuration
 `.env` (git-ignored) holds:
@@ -169,7 +181,8 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 | 2026-09-28 | `8e8481e` | Streamlit UI: submit, record outcome, learned patterns |
 | 2026-09-28 | `1067c29` | ShopFast shop endpoints with fault behavior |
 | 2026-09-28 | `e3face3` | Run all Hindsight calls on one worker thread (fixes "Timeout context manager should be used inside a task" on the second UI analysis) |
-| 2026-09-28 | (this change) | Demo verification results; AC1-AC5 verified |
+| 2026-09-28 | `fbd313a` | Demo verification results; AC1-AC5 verified |
+| 2026-09-28 | (this change) | Act -> verify -> learn: allow-listed runbook actions, human approval, verification, automatic outcome recording |
 
 ## Open items
 - Decision: embedding options and the Integrate tab.

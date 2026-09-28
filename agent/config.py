@@ -20,6 +20,7 @@ class Settings:
     hindsight_bank_id: str
     groq_api_key: str
     groq_model: str
+    shopfast_url: str = "http://127.0.0.1:8001"
 
 
 def _require(name: str) -> str:
@@ -48,4 +49,5 @@ def load_settings(bank_id_override: str | None = None) -> Settings:
         hindsight_bank_id=validate_bank_id(bank_id),
         groq_api_key=_require("GROQ_API_KEY"),
         groq_model=os.getenv("GROQ_MODEL", "").strip() or "openai/gpt-oss-120b",
+        shopfast_url=f"http://{os.getenv('SHOPFAST_HOST', '127.0.0.1')}:{os.getenv('SHOPFAST_PORT', '8001')}",
     )
