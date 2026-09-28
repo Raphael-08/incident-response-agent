@@ -67,10 +67,15 @@ Scenario summary:
 | `shopfast/faults.py` | Fault switches and their log lines | Done |
 | `shopfast/app.py` | Mock shop endpoints; `/admin/faults`; faults return and log a timestamped error line | Done, tested |
 | `agent/actions.py` | ShopFast tool client: list and run allow-listed actions, health checks | Done, tested |
+| `agent/intake.py` | ShopFast alert -> Incident | Done, tested |
+| `shopfast/alerts.py` | Bounded log of failure alerts | Done, tested |
 | `shopfast/remediations.py` | Simulated runbook actions, including decoys | Done, tested |
 | `ui/app.py` | Streamlit UI, 3 tabs, example fault logs, text-only rendering of incident and LLM text | Done, tested with AppTest |
 | `scripts/seed_memory.py` | Validate seed data, `--bank-id`, load into Hindsight | Done, tested |
 | `data/seed_incidents.json` | 25 synthetic incidents | Done |
+
+## Automatic incident intake
+ShopFast records every fault-caused failure as an alert (`shopfast/alerts.py`; `GET /ops/incidents/latest`: time, endpoint, status, error, log line, repeat count). "Detect latest ShopFast incident" in the UI calls `IncidentService.detect_incident`: the agent probes the shop's public endpoints like a monitor; if one fails, it fetches the latest alert and `agent/intake.py` turns it into an `Incident` (service from the log line, SEV1 for `/checkout` and `/login`, title and symptoms from the alert, raw log as error log). A healthy shop yields no incident, so an alert from an already fixed failure is never imported. The detected incident is analyzed immediately and then follows the same approval gate. Manual entry stays as a fallback.
 
 ## Act -> verify -> learn
 The agent can act, but only through an allow-listed, human-approved runbook.
@@ -182,7 +187,8 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 | 2026-09-28 | `1067c29` | ShopFast shop endpoints with fault behavior |
 | 2026-09-28 | `e3face3` | Run all Hindsight calls on one worker thread (fixes "Timeout context manager should be used inside a task" on the second UI analysis) |
 | 2026-09-28 | `fbd313a` | Demo verification results; AC1-AC5 verified |
-| 2026-09-28 | (this change) | Act -> verify -> learn: allow-listed runbook actions, human approval, verification, automatic outcome recording |
+| 2026-09-28 | `bae7c4e` | Act -> verify -> learn: allow-listed runbook actions, human approval, verification, automatic outcome recording |
+| 2026-09-28 | (this change) | Automatic incident intake: ShopFast alerts, Detect button, manual form kept as fallback |
 
 ## Open items
 - Decision: embedding options and the Integrate tab.

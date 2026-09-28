@@ -10,10 +10,11 @@ import logging
 import secrets
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from shopfast.alerts import AlertLog
 from shopfast.faults import FAULT_LOGS, Fault, FaultRegistry
 from shopfast.remediations import ACTIONS
 
@@ -21,6 +22,7 @@ logger = logging.getLogger("shopfast")
 
 app = FastAPI(title="ShopFast (mock)")
 faults = FaultRegistry()
+alerts = AlertLog()
 
 PRODUCTS: dict[str, dict] = {
     "sku-100": {"id": "sku-100", "name": "Running shoes", "price": 89.99},
@@ -57,11 +59,12 @@ class FaultTriggered(Exception):
 
 
 @app.exception_handler(FaultTriggered)
-def fault_response(_request, exc: FaultTriggered) -> JSONResponse:
+def fault_response(request: Request, exc: FaultTriggered) -> JSONResponse:
     status, error = FAULT_RESPONSES[exc.fault]
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     line = f"{stamp} {FAULT_LOGS[exc.fault]}"
     logger.error(line)
+    alerts.record(exc.fault, request.method, request.url.path, status, error, line)
     return JSONResponse(status_code=status, content={"error": error, "log": line})
 
 
@@ -118,6 +121,15 @@ def run_action(name: str) -> dict:
         faults.disable(fault)
     logger.info("ops action %s executed", name)
     return {"action": name, "executed": True}
+
+
+@app.get("/ops/incidents/latest")
+def latest_incident() -> dict:
+    """The newest failure alert, for the agent's automatic incident intake."""
+    alert = alerts.latest()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="No failures recorded")
+    return alert
 
 
 @app.get("/admin/faults")

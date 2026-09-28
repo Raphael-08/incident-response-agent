@@ -102,6 +102,19 @@ class RemediationAttempt(BaseModel):
     at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class ShopFastAlert(BaseModel):
+    """A failure ShopFast recorded (GET /ops/incidents/latest). Turned into an Incident by agent.intake."""
+
+    id: int
+    at: str = Field(max_length=40)
+    method: str = Field(max_length=10)
+    path: str = Field(max_length=200)
+    status: int
+    error: str = Field(max_length=MAX_TEXT_CHARS)
+    log: str = Field(max_length=MAX_LOG_CHARS)
+    count: int = Field(ge=1)
+
+
 class Suggestion(BaseModel):
     """The agent's answer for a new incident."""
 

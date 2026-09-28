@@ -28,8 +28,10 @@ def _suggestion(**overrides) -> Suggestion:
 
 
 class FakeService:
-    def __init__(self, suggestion=None, error=None, next_suggestion=None, verified=True):
+    def __init__(self, suggestion=None, error=None, next_suggestion=None, verified=True, detected=None,
+                 detect_error=None):
         self.analyzed, self.recorded, self.tried, self.remediated = [], [], [], []
+        self._detected, self._detect_error = detected, detect_error
         self._suggestion = suggestion or _suggestion()
         self._next = next_suggestion
         self._error = error
@@ -41,6 +43,11 @@ class FakeService:
         if self._error:
             raise self._error
         return self._next if tried_actions and self._next else self._suggestion
+
+    def detect_incident(self):
+        if self._detect_error:
+            raise self._detect_error
+        return self._detected
 
     def remediate(self, incident, suggestion, approved, previous_attempts=()):
         self.remediated.append((incident, suggestion.proposed_action, approved, list(previous_attempts)))
@@ -252,3 +259,49 @@ def test_failed_verification_shows_error_and_next_action_excludes_tried():
     assert service.tried[-1] == ["restart_payment_api_pods"]
     at = at.button(key="approve_action").click().run()
     assert len(service.remediated[-1][3]) == 1  # earlier failed attempt passed along for the recorded outcome
+
+
+# automatic intake
+
+from agent.actions import ShopFastError  # noqa: E402
+from agent.models import Incident  # noqa: E402
+
+DETECTED = Incident(service="payment-api", severity="SEV1", title="POST /checkout returning 503: Orders database unavailable",
+                    symptoms="Orders database unavailable. ShopFast recorded 1 failed request(s).",
+                    error_log="2026-09-28T11:27:07Z ERROR payment-api FATAL: remaining connection slots are reserved")
+
+
+def test_detect_opens_and_analyzes_the_incident_without_typing():
+    service = FakeService(_with_action(), detected=DETECTED)
+    at = _app(service).button(key="detect_incident").click().run()
+    assert not at.exception
+    assert service.analyzed == [DETECTED]
+    text = _all_text(at)
+    assert DETECTED.incident_id in text and "POST /checkout returning 503" in text
+    assert "Connection pool exhausted (INC-1042)" in text
+
+
+def test_detect_reports_healthy_shop():
+    service = FakeService(detected=None)
+    at = _app(service).button(key="detect_incident").click().run()
+    assert any("no failing shopfast endpoint" in i.value.lower() for i in at.info)
+    assert service.analyzed == []
+
+
+def test_detect_reports_unreachable_shopfast():
+    at = _app(FakeService(detect_error=ShopFastError("connection refused"))).button(key="detect_incident").click().run()
+    assert not at.exception
+    assert any("connection refused" in e.value for e in at.error)
+
+
+def test_detected_incident_goes_through_the_approval_gate():
+    service = FakeService(_with_action(), detected=DETECTED)
+    at = _app(service).button(key="detect_incident").click().run()
+    assert service.remediated == []  # nothing runs on detection alone
+    at.button(key="approve_action").click().run()
+    assert service.remediated[0][0] == DETECTED and service.remediated[0][2] is True
+
+
+def test_manual_form_is_still_available():
+    at = _app(FakeService())
+    assert at.text_input(key="service_name") and at.button(key="analyze")

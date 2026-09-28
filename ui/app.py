@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # streamlit puts ui/ on the path, not the repo root
 
-from agent.actions import ShopFastClient  # noqa: E402
+from agent.actions import ShopFastClient, ShopFastError  # noqa: E402
 from agent.config import ConfigError, load_settings  # noqa: E402
 from agent.llm import IncidentAdvisor  # noqa: E402
 from agent.memory import IncidentMemory, IncidentMemoryError  # noqa: E402
@@ -53,7 +53,9 @@ def load_example() -> None:
 
 def show_suggestion(incident: Incident, suggestion: Suggestion) -> None:
     st.subheader("Suggestion")
-    st.text(f"Incident {incident.incident_id}  |  confidence: {suggestion.confidence}")
+    st.text(f"Incident {incident.incident_id}  |  {incident.severity.value}  |  {incident.service}  |  "
+            f"confidence: {suggestion.confidence}")
+    st.text(incident.title)
     if suggestion.llm_error:
         st.warning(f"AI suggestion unavailable: {suggestion.llm_error}")
     if suggestion.memory_used:
@@ -138,7 +140,46 @@ def action_panel(service: IncidentService, incident_id: str) -> None:
             st.rerun()
 
 
+def analyze(service: IncidentService, incident: Incident) -> None:
+    """Investigate an incident and make it the one shown, whether it was detected or typed in."""
+    try:
+        with st.spinner("Recalling past incidents and asking the advisor..."):
+            suggestion = service.analyze_incident(incident)
+    except IncidentMemoryError as exc:
+        st.error(f"Memory unavailable: {exc}")
+        return
+    st.session_state.setdefault("incidents", {})[incident.incident_id] = (incident, suggestion)
+    st.session_state["last_id"] = incident.incident_id
+
+
+def detect(service: IncidentService) -> None:
+    try:
+        with st.spinner("Probing ShopFast endpoints..."):
+            incident = service.detect_incident()
+    except ShopFastError as exc:
+        st.error(f"ShopFast unreachable: {exc}")
+        return
+    if incident is None:
+        st.info("No failing ShopFast endpoint detected. The shop is healthy.")
+        return
+    analyze(service, incident)
+
+
 def submit_tab(service: IncidentService) -> None:
+    st.caption("The agent probes ShopFast, opens an incident from its latest failure and investigates it.")
+    if st.button("Detect latest ShopFast incident", key="detect_incident", type="primary"):
+        detect(service)
+
+    with st.expander("Or enter an incident manually"):
+        manual_form(service)
+
+    last_id = st.session_state.get("last_id")
+    if last_id:
+        show_suggestion(*st.session_state["incidents"][last_id])
+        action_panel(service, last_id)
+
+
+def manual_form(service: IncidentService) -> None:
     left, right = st.columns([3, 1])
     left.selectbox("Example error log (ShopFast fault)", [f.value for f in Fault], key="example_fault")
     right.button("Load example", key="load_example", on_click=load_example)
@@ -163,19 +204,7 @@ def submit_tab(service: IncidentService) -> None:
         except ValidationError as exc:
             st.error(f"Invalid incident: {validation_message(exc)}")
             return
-        try:
-            with st.spinner("Recalling past incidents and asking the advisor..."):
-                suggestion = service.analyze_incident(incident)
-        except IncidentMemoryError as exc:
-            st.error(f"Memory unavailable: {exc}")
-            return
-        st.session_state.setdefault("incidents", {})[incident.incident_id] = (incident, suggestion)
-        st.session_state["last_id"] = incident.incident_id
-
-    last_id = st.session_state.get("last_id")
-    if last_id:
-        show_suggestion(*st.session_state["incidents"][last_id])
-        action_panel(service, last_id)
+        analyze(service, incident)
 
 
 def outcome_tab(service: IncidentService) -> None:

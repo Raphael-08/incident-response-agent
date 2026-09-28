@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 
 from agent.actions import ShopFastClient, ShopFastError
+from agent.intake import incident_from_alert
 from agent.llm import IncidentAdvisor, LLMError
 from agent.memory import IncidentMemory, IncidentMemoryError
 from agent.models import Incident, Outcome, RemediationAction, RemediationAttempt, Suggestion
@@ -46,6 +47,18 @@ class IncidentService:
             return self._shop.list_actions()
         except ShopFastError:
             return []
+
+    def detect_incident(self) -> Incident | None:
+        """Probe ShopFast like a monitor. If an endpoint fails, open an incident from ShopFast's latest alert.
+
+        Returns None when the shop is healthy, so an old alert is never imported after it was fixed.
+        """
+        if self._shop is None:
+            raise ShopFastError("ShopFast is not configured")
+        if _is_healthy(self._shop.health_check()):
+            return None
+        alert = self._shop.latest_incident()
+        return incident_from_alert(alert) if alert else None
 
     def analyze_incident(self, incident: Incident, tried_actions: Sequence[str] = ()) -> Suggestion:
         """Recall similar past incidents, then ask the LLM for root cause, fix steps and one action to propose.

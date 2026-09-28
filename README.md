@@ -3,10 +3,11 @@
 An AI agent that remembers every past production incident at ShopFast (a fictional e-commerce platform) and uses that memory to suggest root causes and fixes for new incidents. Built on [Hindsight](https://hindsight.vectorize.io/) memory and Groq.
 
 When production breaks, the agent:
-1. Recalls similar past incidents from Hindsight memory and cites them.
-2. Suggests a probable root cause, ordered fix steps, fixes that failed before, and one allow-listed remediation action.
-3. Runs the action only after a human approves it, then verifies the shop is healthy.
-4. Records the outcome in memory automatically, so the next similar incident gets the proven fix.
+1. Detects the failure by probing ShopFast and opens an incident from its latest alert (no copy-paste).
+2. Recalls similar past incidents from Hindsight memory and cites them.
+3. Suggests a probable root cause, ordered fix steps, fixes that failed before, and one allow-listed remediation action.
+4. Runs the action only after a human approves it, then verifies the shop is healthy.
+5. Records the outcome in memory automatically, so the next similar incident gets the proven fix.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for architecture, data model, and task split.
 
@@ -51,4 +52,4 @@ pytest                                                     # tests
 ```
 
 ## Status
-All modules are built and tested (213 tests passing): config, models, log normalizer, Hindsight memory, seed script, Groq advisor, service, Streamlit UI and the ShopFast mock shop. The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.
+All modules are built and tested (239 tests passing): config, models, log normalizer, Hindsight memory, seed script, Groq advisor, service, Streamlit UI and the ShopFast mock shop. The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.

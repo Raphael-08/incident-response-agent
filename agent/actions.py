@@ -9,7 +9,7 @@ import re
 import httpx
 
 from agent.config import Settings
-from agent.models import RemediationAction
+from agent.models import RemediationAction, ShopFastAlert
 
 # Endpoints probed to verify the shop is healthy: method, path, JSON body.
 HEALTH_CHECKS: list[tuple[str, str, dict | None]] = [
@@ -52,6 +52,15 @@ class ShopFastClient:
         response = self._request("POST", f"/ops/actions/{name}")
         if response.status_code != 200:
             raise ShopFastError(f"ShopFast refused action {name}: HTTP {response.status_code}")
+
+    def latest_incident(self) -> ShopFastAlert | None:
+        """The newest failure ShopFast recorded, or None if nothing has failed."""
+        response = self._request("GET", "/ops/incidents/latest")
+        if response.status_code == 404:
+            return None
+        if response.status_code != 200:
+            raise ShopFastError(f"ShopFast incident feed failed: HTTP {response.status_code}")
+        return ShopFastAlert.model_validate(response.json())
 
     def health_check(self) -> dict[str, int]:
         """HTTP status of each probed endpoint, keyed like 'POST /checkout'."""
