@@ -92,14 +92,16 @@ curl http://127.0.0.1:8002/rules -H "X-API-Key: $AGENT_API_KEY"
 Every endpoint except `/health` needs `X-API-Key`. Without `AGENT_API_KEY` in `.env` the API refuses all calls.
 
 ## Status
-All modules are built and tested (334 tests passing). The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.
+All modules are built and tested (381 tests passing). The full demo (existing memory, new incident type, learning loop) was verified on 2026-09-28; acceptance criteria AC1-AC5 are met. See `docs/DESIGN.md` for details.
 
-Latest learning curve (2026-09-29, bank `shopfast-curve-1`, 4 faults x 3 rounds, Groq + Hindsight Cloud):
+<!-- curve:start -->
+Latest learning curve (2026-09-28, 8 faults x 3 rounds, averaged over 2 independent runs on fresh banks, Groq + Hindsight Cloud):
 
 | Round | Fixed by agent's first action (memory on) | Wrong actions (memory on) | Fixed by first action (memory off) | Wrong actions (memory off) |
 |---|---|---|---|---|
-| 1 | 2/4 | 4 | 2/4 | 3 |
-| 2 | 4/4 | 0 | 2/4 | 3 |
-| 3 | 4/4 | 0 | 3/4 | 2 |
+| 1 | 7/8 | 2.5 | 6/8 | 3 |
+| 2 | 7.5/8 | 0.5 | 6/8 | 3 |
+| 3 | 7.5/8 | 1 | 6.5/8 | 2.5 |
 
-With memory, every incident from round 2 on was fixed by the agent's first action and no wrong action touched production. In round 1 the agent could not solve `REDIS_TIMEOUT` alone; the engineer stepped in once, and from round 2 the agent proposed the verified fix itself. One run; LLM results vary run to run.
+After round 1, memory cut wrong actions on production to 0.75 per round on average, against 2.75 with memory off, and raised first-action fixes. The remaining misses with memory are rounds where the LLM proposed no action at all, so the engineer fallback stepped in; LLM results vary run to run, hence the averaging. Per-run details: `data/learning_curve.json`.
+<!-- curve:end -->

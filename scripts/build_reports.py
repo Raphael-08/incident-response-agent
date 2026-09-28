@@ -140,6 +140,7 @@ def curve_svg(report: dict) -> str:
     n = on[0]["incidents"]
     worst = max([r.get("wrong_actions_max", r["wrong_actions"]) for r in on + off] + [1])
     wrong_max = max(2, int(worst + 0.999))
+    wrong_max += wrong_max % 2  # even, so the middle gridline is a whole number
     panels = (line_panel("Fixed by the agent's first action", on, off, "agent_first_try", True, 100, 0)
               + line_panel("Wrong actions run on production", on, off, "wrong_actions", False, wrong_max, 345))
     repeats = report.get("repeats", 1)

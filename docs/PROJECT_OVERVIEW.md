@@ -70,4 +70,4 @@ uv run uvicorn shopfast.app:app --host 127.0.0.1 --port 8001
 uv run uvicorn storefront.app:app --host 127.0.0.1 --port 8003
 uv run streamlit run ui/app.py
 ```
-Code: [github.com/Sanjanasree02/incident-response-agent](https://github.com/Sanjanasree02/incident-response-agent). Pull requests [#1](https://github.com/Sanjanasree02/incident-response-agent/pull/1) and #2 hold the latest work.
+Code: [github.com/Sanjanasree02/incident-response-agent](https://github.com/Sanjanasree02/incident-response-agent). Pull requests [#1](https://github.com/Sanjanasree02/incident-response-agent/pull/1) and [#2](https://github.com/Sanjanasree02/incident-response-agent/pull/2) hold the latest work.

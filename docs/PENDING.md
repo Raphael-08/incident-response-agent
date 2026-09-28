@@ -36,7 +36,7 @@ I'd love a short screen recording (30-60 s) of Claude Code fixing ShopFast throu
 | Item | Who | Notes |
 | --- | --- | --- |
 | Review and merge [PR #1](https://github.com/Sanjanasree02/incident-response-agent/pull/1) | Sanjana | Learning from engineers, reflect postmortems, living runbook, learning curve, REST API, MCP server |
-| Review and merge PR #2 | Sanjana | 4 more faults, averaged learning curve, open incidents saved in SQLite, team rules (directives) |
+| Review and merge [PR #2](https://github.com/Sanjanasree02/incident-response-agent/pull/2) | Sanjana | 4 more faults, averaged learning curve, open incidents saved in SQLite, team rules (directives) |
 | Setup after merging | Everyone | Run `uv pip install -r requirements.txt`, then `uv run python -m scripts.seed_memory` on your bank; that adds the team rules and the living runbook. You only need `AGENT_API_KEY` in `.env` if you use the REST API. |
 
 ## 4. Things I'd like us to check before the demo
