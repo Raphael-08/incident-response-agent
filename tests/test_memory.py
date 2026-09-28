@@ -242,3 +242,26 @@ def test_hindsight_errors_are_wrapped_with_operation_and_bank(call):
     with pytest.raises(IncidentMemoryError, match=BANK) as info:
         call(memory)
     assert isinstance(info.value.__cause__, ConnectionError)
+
+
+# closing
+
+class ClosableFake(FakeHindsight):
+    closed = 0
+
+    def close(self):
+        self.closed += 1
+
+
+def test_close_closes_the_hindsight_client():
+    client = ClosableFake()
+    _memory(client).close()
+    assert client.closed == 1
+
+
+def test_context_manager_closes_client_even_on_error():
+    client = ClosableFake()
+    with pytest.raises(RuntimeError):
+        with _memory(client):
+            raise RuntimeError("boom")
+    assert client.closed == 1

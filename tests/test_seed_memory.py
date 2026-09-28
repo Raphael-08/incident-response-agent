@@ -10,6 +10,7 @@ class FakeMemory:
 
     def __init__(self, fail_ids=(), bank_error=None):
         self.calls = []
+        self.closed = False
         self._fail_ids = set(fail_ids)
         self._bank_error = bank_error
 
@@ -17,6 +18,15 @@ class FakeMemory:
         self.calls.append("ensure_bank")
         if self._bank_error:
             raise self._bank_error
+
+    def close(self):
+        self.closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     def retain_historical(self, incident):
         self.calls.append(incident.incident_id)
@@ -54,6 +64,17 @@ def test_main_uses_bank_override_and_exit_code(monkeypatch, fail_ids, exit_code)
         return object()
 
     monkeypatch.setattr(seed_memory, "load_settings", fake_load_settings)
-    monkeypatch.setattr(seed_memory, "IncidentMemory", lambda settings: FakeMemory(fail_ids=fail_ids))
+    memory = FakeMemory(fail_ids=fail_ids)
+    monkeypatch.setattr(seed_memory, "IncidentMemory", lambda settings: memory)
     assert seed_memory.main(["--bank-id", "shopfast-incidents-demo3"]) == exit_code
     assert seen["bank"] == "shopfast-incidents-demo3"
+    assert memory.closed
+
+
+def test_main_closes_memory_when_bank_creation_fails(monkeypatch):
+    memory = FakeMemory(bank_error=IncidentMemoryError("bad key"))
+    monkeypatch.setattr(seed_memory, "load_settings", lambda bank_id_override=None: object())
+    monkeypatch.setattr(seed_memory, "IncidentMemory", lambda settings: memory)
+    with pytest.raises(IncidentMemoryError):
+        seed_memory.main([])
+    assert memory.closed

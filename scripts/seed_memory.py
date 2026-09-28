@@ -50,9 +50,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     incidents = load_seed_incidents()
     print(f"Validated {len(incidents)} seed incidents.")
-    memory = IncidentMemory(load_settings(args.bank_id))
-    print(f"Seeding bank {memory.bank_id!r}...")
-    failed = seed(memory, incidents)
+    with IncidentMemory(load_settings(args.bank_id)) as memory:
+        print(f"Seeding bank {memory.bank_id!r}...")
+        failed = seed(memory, incidents)
     if failed:
         print(f"{len(failed)} of {len(incidents)} incidents failed: {', '.join(failed)}", file=sys.stderr)
         return 1

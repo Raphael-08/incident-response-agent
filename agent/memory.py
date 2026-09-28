@@ -89,6 +89,16 @@ class IncidentMemory:
     def bank_id(self) -> str:
         return self._bank_id
 
+    def close(self) -> None:
+        """Close the Hindsight client's HTTP session. Call when done, or use `with IncidentMemory(...)`."""
+        self._client.close()
+
+    def __enter__(self) -> "IncidentMemory":
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()
+
     def _call(self, operation: str, fn: Callable[[], T]) -> T:
         try:
             return fn()
