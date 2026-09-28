@@ -139,7 +139,6 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 | 2026-09-28 | (this change) | Design doc: final architecture, module status, configuration, embedding proposal, open items |
 
 ## Open items
-- Tests: model tests not yet run; `pip install` fails with an SSL certificate error on the dev machine. Normalizer tests pass (4/4).
 - GitHub remote: repo URL pending; push after it is shared.
 - Decision: embedding options and the Integrate tab.
 - Build order: `agent/memory.py` and seed script, then `llm.py` and `service.py`, then UI, then ShopFast endpoints.
