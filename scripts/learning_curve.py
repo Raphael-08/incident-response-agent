@@ -10,6 +10,9 @@ so one lucky or unlucky LLM run does not decide the result.
 Approvals are given by the harness, and when the agent proposes nothing the harness plays an engineer without
 memory who tries the runbook in listed order (see scripts/evaluate_learning.py). The UI keeps its human gate.
 
+Repeats can also run in parallel as separate processes (for example one per Groq key, since each key has its own
+rate limit), each with --repeats 1 and its own --out, then be combined with --merge.
+
 Run (always against a fresh bank; the main bank is refused):
   python -m scripts.learning_curve --bank-id shopfast-curve-2 --rounds 3 --baseline --repeats 3
 """
@@ -133,8 +136,18 @@ def print_report(report: dict) -> None:
             print(f"{row['round']:<6}" + "".join(f"{row[k]:>18}" for k in keys) + f"{row['incidents']:>11}")
 
 
+def merge_reports(paths: Sequence[Path], bank_id: str) -> dict:
+    """Combine reports from parallel runs into one averaged report."""
+    runs = []
+    for path in paths:
+        runs += json.loads(Path(path).read_text(encoding="utf-8"))["runs"]
+    return build_report(runs, bank_id)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Measure the agent's learning curve over repeated incidents.")
+    parser.add_argument("--merge", nargs="+", type=Path, metavar="REPORT",
+                        help="Combine reports of parallel runs into --out instead of running")
     parser.add_argument("--bank-id", required=True, help="Fresh Hindsight bank for this run (not the main bank)")
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--baseline", action="store_true", help="Also run the rounds with memory switched off")
@@ -143,6 +156,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pause", type=float, default=20.0, help="Seconds between LLM calls (Groq free tier)")
     parser.add_argument("--out", type=Path, default=RESULTS_FILE)
     args = parser.parse_args(argv)
+    if args.merge:
+        report = merge_reports(args.merge, args.bank_id)
+        args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        print_report(report)
+        print(f"\nMerged {report['repeats']} run(s). Saved to {args.out}")
+        return 0
     if args.bank_id == MAIN_BANK:
         parser.error(f"refusing to write evaluation incidents into the main bank {MAIN_BANK!r}; use a fresh bank ID")
     if args.rounds < 2:

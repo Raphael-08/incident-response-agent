@@ -88,3 +88,17 @@ def test_report_shape_round_trips_as_json(tmp_path):
 def test_refuses_main_bank_and_single_round(argv):
     with pytest.raises(SystemExit):
         lc.main(argv)
+
+
+def test_merge_combines_parallel_runs(tmp_path):
+    parts = []
+    for n, first in ((1, 2), (2, 4)):
+        part = tmp_path / f"r{n}.json"
+        part.write_text(json.dumps(lc.build_report([{"bank_id": f"b-r{n}", "with_memory": [_row(1, first, 0)],
+                                                     "memory_off": [_row(1, 2, 2)]}], f"b-r{n}")))
+        parts.append(part)
+    out = tmp_path / "merged.json"
+    assert lc.main(["--bank-id", "b", "--merge", *map(str, parts), "--out", str(out)]) == 0
+    merged = json.loads(out.read_text())
+    assert merged["repeats"] == 2 and merged["with_memory"][0]["agent_first_try"] == 3
+    assert [r["bank_id"] for r in merged["runs"]] == ["b-r1", "b-r2"]
