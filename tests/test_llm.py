@@ -36,13 +36,14 @@ def _answer(**overrides) -> dict:
         "fix_steps": ["Roll back to previous version (INC-1042)", "Lower pool_size per worker"],
         "avoid_steps": ["Restarting pods (failed in INC-1042)"],
         "confidence": "high",
+        "relevant_incident_ids": ["INC-1042"],
     }
     data.update(overrides)
     return data
 
 
 GENERIC = {"probable_root_cause": "Upstream dependency slow", "fix_steps": ["Check dependency latency"],
-           "avoid_steps": [], "confidence": "high"}
+           "avoid_steps": [], "confidence": "high", "relevant_incident_ids": []}
 
 
 def _incident(**overrides) -> Incident:
@@ -151,7 +152,11 @@ def test_json_inside_code_fence_is_accepted():
     json.dumps(_answer(confidence="certain")),
     json.dumps({"fix_steps": []}),
     json.dumps(_answer(fix_steps=["Apply fix from INC-9999"])),
-], ids=["not-json", "bad-confidence", "missing-root-cause", "cites-unknown-incident"])
+    json.dumps({k: v for k, v in _answer().items() if k != "relevant_incident_ids"}),
+    json.dumps(_answer(relevant_incident_ids=["INC-9999"])),
+    json.dumps(_answer(relevant_incident_ids=[])),
+], ids=["not-json", "bad-confidence", "missing-root-cause", "cites-unknown-incident",
+        "missing-relevant-ids", "relevant-id-not-recalled", "cites-incident-judged-unrelated"])
 def test_invalid_answer_is_retried_then_succeeds(bad):
     client = FakeGroq(bad, _answer())
     assert _advisor(client).suggest(_incident(), SIMILAR, []).confidence == "high"
@@ -191,3 +196,73 @@ def test_real_client_has_sdk_retries_disabled(monkeypatch):
     IncidentAdvisor(Settings("u", "k", "shopfast-incidents", "gsk_key", MODEL))
     assert seen["api_key"] == "gsk_key"
     assert seen["max_retries"] == 0
+
+
+# relevance
+
+TWO_SIMILAR = SIMILAR + [SimilarIncident(incident_id="INC-1122", summary="Frontend TypeError on checkout")]
+
+
+def test_prompt_asks_llm_to_judge_relevance():
+    client = FakeGroq(_answer())
+    _advisor(client).suggest(_incident(), TWO_SIMILAR, [])
+    system = client.calls[0]["messages"][0]["content"]
+    assert "relevant_incident_ids" in system
+    assert "same failure" in system.lower()
+
+
+def test_only_relevant_incidents_are_kept_in_recall_order():
+    answer = _answer(relevant_incident_ids=["INC-1122", "INC-1042"])
+    suggestion = _advisor(FakeGroq(answer)).suggest(_incident(), TWO_SIMILAR, [])
+    assert [s.incident_id for s in suggestion.similar_incidents] == ["INC-1042", "INC-1122"]
+    answer = _answer(relevant_incident_ids=["INC-1042"])
+    suggestion = _advisor(FakeGroq(answer)).suggest(_incident(), TWO_SIMILAR, [])
+    assert [s.incident_id for s in suggestion.similar_incidents] == ["INC-1042"]
+    assert suggestion.memory_used is True
+
+
+def test_no_relevant_incident_means_generic_answer():
+    suggestion = _advisor(FakeGroq(GENERIC)).suggest(_incident(), TWO_SIMILAR, [])
+    assert suggestion.similar_incidents == []
+    assert suggestion.memory_used is False
+    assert suggestion.confidence == "low"
+
+
+# TLS
+
+def test_real_client_verifies_tls_with_the_os_trust_store(monkeypatch):
+    import httpx
+    import truststore
+
+    seen = {}
+    monkeypatch.setattr(llm, "Groq", lambda **kwargs: seen.update(kwargs))
+    IncidentAdvisor(Settings("u", "k", "shopfast-incidents", "gsk_key", MODEL))
+    assert isinstance(seen["http_client"], httpx.Client)
+    assert isinstance(llm.os_ssl_context(), truststore.SSLContext)
+
+
+# rate limits
+
+class RateLimited(Exception):
+    """Shape of groq.RateLimitError: carries the HTTP response with a retry-after header."""
+
+    def __init__(self, retry_after: str):
+        super().__init__("Error code: 429 - rate_limit_exceeded")
+        self.status_code = 429
+        self.response = SimpleNamespace(headers={"retry-after": retry_after})
+
+
+def test_rate_limit_waits_as_long_as_groq_asks():
+    waits = []
+    client = FakeGroq(RateLimited("7"), _answer())
+    advisor = IncidentAdvisor(Settings("u", "k", "shopfast-incidents", "k", MODEL), client=client, sleep=waits.append)
+    assert advisor.suggest(_incident(), SIMILAR, []).confidence == "high"
+    assert waits == [7.0]
+
+
+def test_rate_limit_wait_is_capped():
+    waits = []
+    client = FakeGroq(RateLimited("600"), _answer())
+    advisor = IncidentAdvisor(Settings("u", "k", "shopfast-incidents", "k", MODEL), client=client, sleep=waits.append)
+    advisor.suggest(_incident(), SIMILAR, [])
+    assert waits == [llm.MAX_WAIT_SECONDS]

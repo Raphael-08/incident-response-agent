@@ -43,7 +43,7 @@ Help on-call engineers at ShopFast (a fictional e-commerce platform) resolve pro
 | `agent/models.py` | Pydantic models; all input validation; incident ID generation | Done |
 | `agent/log_normalizer.py` | Strip noise from logs before recall | Done, tested |
 | `agent/memory.py` | Hindsight `create_bank`, `retain`, `recall`, learned patterns | Done, tested with fake client |
-| `agent/llm.py` | Groq call, JSON output, retries, `LLMError`, delimited untrusted input, citation check | Done, tested with fake client |
+| `agent/llm.py` | Groq call, JSON output, retries (honors 429 retry-after), `LLMError`, delimited untrusted input, relevance judging, citation check | Done, tested with fake client |
 | `agent/service.py` | `analyze_incident`, `record_outcome`; returns memory when LLM fails | Done, tested with fakes |
 | `shopfast/faults.py` | Fault switches and their log lines | Done |
 | `shopfast/app.py` | Mock shop endpoints; `/admin/faults` | Admin done, shop endpoints stubbed |
@@ -66,6 +66,7 @@ Help on-call engineers at ShopFast (a fictional e-commerce platform) resolve pro
 - One shared bank: `shopfast-incidents` (overridable per demo run, see below).
 - Seeding: one `retain` per past incident, `document_id = incident_id`, metadata `service`, `severity`, `resolved`. Content text includes the incident ID so recalled facts can be cited.
 - Analyze, similar incidents: `recall(query, types=["world"], include_chunks=True)`. Chunks provide source text for citations.
+- Relevance: recall always returns the nearest incidents, and reranker scores overlap between true and false matches, so no fixed threshold works. The LLM returns `relevant_incident_ids` (must be recalled IDs); only those are cited and shown, and `memory_used` is false when none match. This makes a new failure type get a generic answer (AC4).
 - Analyze, learned patterns: `recall(query, types=["observation"])`. Observations are patterns Hindsight consolidates across many incidents (for example "restarting pods never fixes pool exhaustion"). Shown in the UI as "What the agent has learned", so learning is visible, not only search.
 - Recall query: `service + title + symptoms + normalize_log(error_log)`. `agent/log_normalizer.py` replaces timestamps, IPs, UUIDs, pod hashes, hex values and long numbers with placeholders, so the same error from different runs produces the same query.
 - Learn: `record_outcome` calls `retain` with the new incident and its outcome, including failed attempts.
@@ -97,6 +98,7 @@ Then set `HINDSIGHT_BANK_ID=shopfast-incidents-demo3` in `.env`. Old banks stay 
 - Fault switches held in memory: simple; state resets on restart.
 
 ## Security
+- Groq calls verify TLS against the OS certificate store (`truststore`), so antivirus or proxy roots installed in Windows are trusted. Verification is never disabled.
 - Secrets only in `.env` (git-ignored). `.env.example` has placeholders.
 - Pydantic validation with length limits and patterns on all inputs.
 - No `unsafe_allow_html` in Streamlit.
@@ -140,8 +142,6 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 | 2026-09-28 | `8af7835` | Fix input validation (whitespace, required `reported_at`), log normalizer (comma milliseconds, region names), empty `GROQ_MODEL`; 9 regression tests |
 
 ## Open items
-- Groq TLS fails on machines whose antivirus or proxy intercepts HTTPS (seen: Avast Web Shield); certifi lacks its root.
-- AC4 at risk: recall always returns nearest incidents, so a new failure type is not reported as "no similar incident". Reranker scores are not calibrated enough for a fixed threshold.
 - Decision: embedding options and the Integrate tab.
 - Build order: (done) `agent/memory.py` and seed script, (done) `llm.py` and `service.py`, then UI, then ShopFast endpoints.
 

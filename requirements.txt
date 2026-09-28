@@ -6,3 +6,4 @@ streamlit
 pydantic>=2
 python-dotenv
 pytest
+truststore
