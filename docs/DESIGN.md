@@ -42,13 +42,13 @@ Help on-call engineers at ShopFast (a fictional e-commerce platform) resolve pro
 | `agent/config.py` | Load settings from env; fail fast when missing; bank ID validation and override | Done |
 | `agent/models.py` | Pydantic models; all input validation; incident ID generation | Done |
 | `agent/log_normalizer.py` | Strip noise from logs before recall | Done, tested |
-| `agent/memory.py` | Hindsight `create_bank`, `retain`, `recall`, learned patterns | Interface only |
+| `agent/memory.py` | Hindsight `create_bank`, `retain`, `recall`, learned patterns | Done, tested with fake client |
 | `agent/llm.py` | Groq call, JSON output, retries, `LLMError` | Interface only |
 | `agent/service.py` | `analyze_incident`, `record_outcome` | Interface only |
 | `shopfast/faults.py` | Fault switches and their log lines | Done |
 | `shopfast/app.py` | Mock shop endpoints; `/admin/faults` | Admin done, shop endpoints stubbed |
 | `ui/app.py` | Streamlit UI, 3 tabs | Placeholder |
-| `scripts/seed_memory.py` | Validate seed data, `--bank-id`, load into Hindsight | Validation done, retain TODO |
+| `scripts/seed_memory.py` | Validate seed data, `--bank-id`, load into Hindsight | Done, tested |
 | `data/seed_incidents.json` | 25 synthetic incidents | Done |
 
 ## Configuration
@@ -141,7 +141,7 @@ Security for embedding: API key per client (stored hashed), one memory bank per 
 
 ## Open items
 - Decision: embedding options and the Integrate tab.
-- Build order: `agent/memory.py` and seed script, then `llm.py` and `service.py`, then UI, then ShopFast endpoints.
+- Build order: (done) `agent/memory.py` and seed script, then `llm.py` and `service.py`, then UI, then ShopFast endpoints.
 
 ## Future work
 - Agent learns whether its own suggestions worked (retain suggestion plus result).
